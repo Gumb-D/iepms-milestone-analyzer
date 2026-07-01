@@ -413,10 +413,7 @@ def format_sla_row(kpi_name, stats):
     return f"| {kpi_name} | {total_monitored} | {met} | {warn} | {breached} | {pending} | {compliance_str} | {avg_days_str} |"
 
 def execute_api_fetch_workflow(script_dir, input_dir):
-    """
-    Executes the file fetching workflow. Returns True if successful.
-    If auth is expired, starts the sync server.
-    """
+    script_start_time = datetime.datetime.now()
     auth_path = os.path.join(script_dir, "api_auth.json")
     if not os.path.exists(auth_path):
         run_auth_server(script_dir)
@@ -626,7 +623,18 @@ def execute_api_fetch_workflow(script_dir, input_dir):
                     matched_row = None
                     for row in rows:
                         file_name = row.get("fileName") or ""
-                        if pat in file_name:
+                        submit_date_str = row.get("submitDate")
+                        
+                        is_recent = False
+                        if submit_date_str:
+                            try:
+                                submit_dt = datetime.datetime.strptime(submit_date_str, "%Y-%m-%d %H:%M:%S")
+                                if submit_dt >= (script_start_time - datetime.timedelta(minutes=3)):
+                                    is_recent = True
+                            except ValueError:
+                                pass
+                                
+                        if pat in file_name and is_recent:
                             matched_row = row
                             break
                             
