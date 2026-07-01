@@ -22,7 +22,11 @@ python D:/dev/projects/iepms/scripts/IEPMS_Milestone_Analyzer.py --year <target_
 ```
 *(For example, if the user requested to fetch first, run: `python D:/dev/projects/iepms/scripts/IEPMS_Milestone_Analyzer.py --year 2026 --fetch`)*
 
-*Note: The script automatically handles loading cookies from `D:/dev/projects/iepms/scripts/api_auth.json` to perform API calls, downloading files, converting Excel (.xlsx) files to CSV, and saving config mappings.*
+* **Interactive Auth Sync Handling**:
+  If the command outputs `Waiting for sync request...` (indicating the session cookies are missing or expired):
+  1. STOP execution.
+  2. Ask the user in the chat: *"Please open the ZTE IEPMS page in your browser and click your 'Sync Auth' bookmarklet to refresh your session."*
+  3. The local server running inside the python script will receive the sync request automatically, write the credentials to `scripts/api_auth.json`, shut down, and resume downloading the files.
 
 ## 3. Read and Process Outputs
 After the command completes successfully:
