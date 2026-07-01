@@ -2,6 +2,10 @@
 
 This workspace is organized into dedicated subdirectories to isolate data inputs, code execution scripts, and generated outputs.
 
+> [!IMPORTANT]
+> **ZTE NETWORK CONSTRAINT**
+> The automated download features in this project communicate directly with `iepms.zte.com.cn`, which is only accessible within the **ZTE Corporate Network** or via **ZTE VPN**. Connection requests will fail or time out if executed outside this network environment.
+
 ## 📁 Directory Layout
 
 * **`input/`**: Contains the source project data files (both `.xlsx` Excel workbooks and `.csv` files).

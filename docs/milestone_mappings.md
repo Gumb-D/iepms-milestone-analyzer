@@ -39,14 +39,14 @@ This document defines the column header mappings used to extract milestone compl
 
 | Milestone | Col Index | Row 0 (ID/Code) | Row 1 (WBS Stage) | Row 2 (Task Name) | Row 3 (Display Header) |
 | :--- | :---: | :--- | :--- | :--- | :--- |
-| **SOW** | 538 | `WPC000013914|actual_end_date` | TX Planning | TX Planning | `actual end time` |
-| **TSS** | 14 | `WP10400|AC0000198502|actual_end_date` | Survey&Design | Physical Survey | `actual end time` |
-| **MC** | 64 | `WP11000|AC0000155784|actual_end_date` | Ready For Installation | Material Collection | `actual end time` |
-| **MOS** | 78 | `WP10500|AC0000155785|actual_end_date` | Material On Site | Material On Site | `actual end time` |
-| **TI** | 92 | `WP11101|AC0000155786|actual_end_date` | Telecom Installation | Equipment Installation | `actual end time` |
-| **L1** | 311 | `WPC000011222|AC0000155795|actual_end_date` | Q&EHS | L1 Approved | `actual end time` |
-| **RFS** | 143 | `WP11401|AC0000155788|actual_end_date` | Software Commissioning | Site Integrated | `actual end time` |
-| **PAC** | 281 | `WP12000|AC0000155793|actual_end_date` | (Preliminary/Provisional) Acceptance Certification | PAC Approved | `actual end time` |
+| **SOW** | 538 | `` |  |  | `` |
+| **TSS** | 14 | `docata|ZDCSZ641765` | Installation | Wireless RAN | `Subcon PR - TI` |
+| **MC** | 64 | `` |  |  | `` |
+| **MOS** | 78 | `` |  |  | `` |
+| **TI** | 92 | `` |  |  | `` |
+| **L1** | 311 | `` |  |  | `` |
+| **RFS** | 143 | `` |  |  | `` |
+| **PAC** | 281 | `` |  |  | `` |
 
 ---
 
@@ -69,14 +69,14 @@ This document defines the column header mappings used to extract milestone compl
 
 | Milestone | Col Index | Row 0 (ID/Code) | Row 1 (WBS Stage) | Row 2 (Task Name) | Row 3 (Display Header) |
 | :--- | :---: | :--- | :--- | :--- | :--- |
-| **SOW** | 250 | `WPC000013914|AC0000157841|actual_end_date` | TX Planning | TX Planning | `actual end time` |
-| **TSS** | 70 | `WP10400|AC0000111560|actual_end_date` | Survey&Design | Physical Survey | `actual end time` |
-| **MC** | 96 | `WP11000|AC0000111565|actual_end_date` | Ready For Installation | Material Collection | `actual end time` |
-| **MOS** | 101 | `WP10500|AC0000111566|actual_end_date` | Material On Site | Material On Site | `actual end time` |
-| **TI** | 107 | `WP11100|AC0000111567|actual_end_date` | Telecom Installation | Equipment Installation | `actual end time` |
-| **L1** | 128 | `WPC000011222|AC0000111592|actual_end_date` | Q&EHS | L1 Approved | `actual end time` |
-| **RFS** | 119 | `WP11400|AC0000111569|actual_end_date` | Software Commissioning | TX Integrated | `actual end time` |
-| **PAC** | 222 | `WP12000|AC0000111579|actual_end_date` | (Preliminary/Provisional) Acceptance Certification | PAC Approved | `actual end time` |
+| **SOW** | 250 | `WPC000013914|AC0000157841|plan_end_date` | TX Planning | TX Planning | `planned end time` |
+| **TSS** | 70 | `WP10400|AC0000111560|plan_end_date` | Survey&Design | Physical Survey | `planned end time` |
+| **MC** | 96 | `WP11000|AC0000111565|plan_end_date` | Ready For Installation | Material Collection | `planned end time` |
+| **MOS** | 101 | `WP10500|AC0000111566|plan_end_date` | Material On Site | Material On Site | `planned end time` |
+| **TI** | 107 | `WP11100|AC0000111567|plan_end_date` | Telecom Installation | Equipment Installation | `planned end time` |
+| **L1** | 128 | `WPC000011222|AC0000111592|plan_end_date` | Q&EHS | L1 Approved | `planned end time` |
+| **RFS** | 119 | `WP11400|AC0000111569|plan_end_date` | Software Commissioning | TX Integrated | `planned end time` |
+| **PAC** | 222 | `WP12000|AC0000111579|plan_end_date` | (Preliminary/Provisional) Acceptance Certification | PAC Approved | `planned end time` |
 
 ---
 
@@ -84,14 +84,14 @@ This document defines the column header mappings used to extract milestone compl
 
 | Milestone | Col Index | Row 0 (ID/Code) | Row 1 (WBS Stage) | Row 2 (Task Name) | Row 3 (Display Header) |
 | :--- | :---: | :--- | :--- | :--- | :--- |
-| **SOW** | 10 | `WPC000014714|AC0000197770|actual_end_date` | TX Planning | TX Planning | `actual end time` |
-| **TSS** | 43 | `WP10400|AC0000197581|actual_end_date` | Survey&Design | Physical Survey | `actual end time` |
-| **MC** | 109 | `WP11000|AC0000197590|actual_end_date` | Ready For Installation | Material Collection | `actual end time` |
-| **MOS** | 112 | `WP10500|AC0000197592|actual_end_date` | Material On Site | Material On Site | `actual end time` |
-| **TI** | 115 | `WP11100|AC0000197591|actual_end_date` | Telecom Installation | Equipment Installation | `actual end time` |
-| **L1** | 127 | `WPC000013474|AC0000197764|actual_end_date` | Q&EHS | L1 Approved | `actual end time` |
-| **RFS** | 118 | `WP11400|AC0000197593|actual_end_date` | Software Commissioning | Site Integrated | `actual end time` |
-| **PAC** | 148 | `WP12000|AC0000197605|actual_end_date` | (Preliminary/Provisional) Acceptance Certification | PAC Approved | `actual end time` |
+| **SOW** | 10 | `WPC000014714|AC0000197770|plan_end_date` | TX Planning | TX Planning | `planned end time` |
+| **TSS** | 43 | `docata|ZDCSZ01096515` | Site Acquisition \AC Power Access | Microwave | `NE Structure Type` |
+| **MC** | 109 | `docata|ZDCSZ01027726` | Network Planning | Microwave | `DO Remarks` |
+| **MOS** | 112 | `WP11000|AC0000197590|responsible_user` | Ready For Installation | Material Collection | `responsible person` |
+| **TI** | 115 | `WP10500|AC0000197592|responsible_user` | Material On Site | Material On Site | `responsible person` |
+| **L1** | 127 | `docata|ZDCSZ01027728` | Installation | Microwave | `HO remarks` |
+| **RFS** | 118 | `WP11100|AC0000197591|responsible_user` | Telecom Installation | Equipment Installation | `responsible person` |
+| **PAC** | 148 | `WPC000013475|AC0000197768|responsible_user` | CD ATP Approval | CD ATP Approval | `responsible person` |
 
 ---
 

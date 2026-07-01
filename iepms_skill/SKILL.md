@@ -8,7 +8,9 @@ tools:
 
 # Instruction Playbook: Analyze IEPMS Milestone Data
 
-Follow these instructions whenever the user asks to analyze IEPMS project files, compile milestone progress, or generate a report.
+> [!IMPORTANT]
+> **ZTE NETWORK CONSTRAINT**
+> This skill and its API integration can **only** be executed when connected to the **ZTE Corporate Network** or the **ZTE VPN**. If run outside of the ZTE network, connection attempts to `iepms.zte.com.cn` will time out or fail.
 
 ## 1. Parameter Extraction
 * Ask or look in the conversation context for the target **year** (e.g., `2026`). If not specified, default to `2026`.
