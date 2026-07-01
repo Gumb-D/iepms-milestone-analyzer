@@ -50,6 +50,7 @@ After the command completes successfully:
 
 ## 4. Respond to the User
 Present the results in a clean, professional response:
-* Provide a brief confirmation of the files analyzed and column mappings.
-* Display the **Combined Monthly Progress** table for the requested year.
-* Highlight key progress metrics, such as the total Integration (RFS) count year-to-date (YTD) or any major milestone spikes.
+* **CRITICAL - Verbatim Tables**: You **MUST copy and print the markdown tables exactly as they are formatted inside the generated report file** (`output/Milestone_Progress_Report_<target_year>.md`). Do **NOT** summarize, compress, or rewrite the tables into custom formats, as this breaks markdown table rendering.
+* Print the **Combined Monthly Progress (All Projects)** table verbatim.
+* Print the **SLA & KPI Performance (Combined)** table verbatim.
+* Summarize key observations and project-level performance highlights.
