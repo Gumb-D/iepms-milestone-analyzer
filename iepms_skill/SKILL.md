@@ -17,12 +17,12 @@ tools:
 * Check if the user requested to **download**, **fetch**, or **pull** fresh files directly from the server. If so, set the `fetch_flag` to `--fetch`.
 
 ## 2. Command Execution
-Execute the Python analyzer CLI script using the `execute_command` tool. Run this command from the project root folder `D:/dev/projects/iepms`:
+Execute the Python analyzer CLI script using the `execute_command` tool. Run this command from the project root folder `D:/dev/projects/iepms-milestone-analyzer`:
 
 ```bash
-python D:/dev/projects/iepms/scripts/IEPMS_Milestone_Analyzer.py --year <target_year> <fetch_flag>
+python D:/dev/projects/iepms-milestone-analyzer/scripts/IEPMS_Milestone_Analyzer.py --year <target_year> <fetch_flag>
 ```
-*(For example, if the user requested to fetch first, run: `python D:/dev/projects/iepms/scripts/IEPMS_Milestone_Analyzer.py --year 2026 --fetch`)*
+*(For example, if the user requested to fetch first, run: `python D:/dev/projects/iepms-milestone-analyzer/scripts/IEPMS_Milestone_Analyzer.py --year 2026 --fetch`)*
 
 * **Interactive Auth Sync Handling**:
   If the command outputs `Waiting for sync request...` (indicating the session cookies are missing or expired):
@@ -32,7 +32,7 @@ python D:/dev/projects/iepms/scripts/IEPMS_Milestone_Analyzer.py --year <target_
     1. Navigate to the ZTE IEPMS page: `https://iepms.zte.com.cn`.
     2. Wait for auto-authentication (SSO/VPN) to complete.
     3. Evaluate `document.cookie` on the page to retrieve the cookies.
-    4. Write the cookies directly to `D:/dev/projects/iepms/scripts/api_auth.json` under the `"cookie"` key.
+    4. Write the cookies directly to `D:/dev/projects/iepms-milestone-analyzer/scripts/api_auth.json` under the `"cookie"` key.
     5. Re-run the analyzer command. It will bypass the sync server and succeed immediately.
     
   * **Option B: Bookmarklet Sync (User Interaction)**:
@@ -44,9 +44,9 @@ python D:/dev/projects/iepms/scripts/IEPMS_Milestone_Analyzer.py --year <target_
 ## 3. Read and Process Outputs
 After the command completes successfully:
 1. **Read Column Mappings**: Open and read the mapped column headers documentation from:
-   `D:/dev/projects/iepms/docs/milestone_mappings.md`
+   `D:/dev/projects/iepms-milestone-analyzer/docs/milestone_mappings.md`
 2. **Read Progress Report**: Open and read the generated monthly progress report from:
-   `D:/dev/projects/iepms/output/Milestone_Progress_Report_<target_year>.md`
+   `D:/dev/projects/iepms-milestone-analyzer/output/Milestone_Progress_Report_<target_year>.md`
 
 ## 4. Respond to the User
 Present the results in a clean, professional response:
