@@ -30,23 +30,28 @@ There are two ways to operate the tool: **Manual Mode** (where you copy files yo
 
 ---
 
-### Option B: Automated Fetch Mode (Direct API download) 🚀
-Instead of manually exporting, renaming, and copying the files, the script can query and download the completed sheets directly from the ZTE EPMS servers:
+### Option B: Automated Fetch Mode (1-Click Sync Auth) 🚀
+Instead of manually exporting, renaming, and copying the files, the script can trigger exports, poll their status, and download them automatically using your active login cookies.
 
-1. **Submit the Export**: Log into the ZTE IEPMS portal and click **Export** on the project sheets you want to update (this schedules the export tasks on the server).
-2. **Grab Authentication Headers**:
-   * Open Developer Tools (**F12**), select the **Network** tab, and click "Download" on any completed export sheet in the "View Export Result" modal.
-   * Right-click the download network request, select **Copy as cURL**, and locate the `Cookie` string and the `X-Auth-Value` header.
-3. **Save Credentials**:
-   * Create or open **`scripts/api_auth.json`** (if it doesn't exist, run `python scripts/IEPMS_Milestone_Analyzer.py --fetch` once to generate a template).
-   * Paste your active **`cookie`** string and **`x_auth_value`** into the JSON file.
-   * *(Optional)* If you want to download ZTE Project files (`MW_EOS_Swap` and `ZTE_TX_MINI`), switch to that project in the browser, copy its `projId` from the request headers, and paste it under the `ZTE_Mini_Project` section in `scripts/api_auth.json`.
-4. **Run Automated Fetch & Analyze**:
-   Run the script with the `--fetch` flag:
-   ```bash
-   python scripts/IEPMS_Milestone_Analyzer.py --fetch --year 2026
-   ```
-   *The script will query your export records list, identify the latest completed file for each project, download them to `input/`, convert them, and compile the progress report in one step!*
+#### 1. Setup Your Browser Bookmarklet (One-Time Setup)
+Create a new bookmark in your browser (e.g., Google Chrome or Microsoft Edge) with these properties:
+* **Name**: `Sync Auth`
+* **URL**: Copy and paste the exact code below into the URL box:
+  ```javascript
+  javascript:(async()=>{try{const r=await fetch('http://localhost:18290/sync',{method:'POST',body:document.cookie});const d=await r.json();if(d.status==='success')alert('🔒 ZTE EPMS Auth Sync Successful! Check your terminal.');else alert('❌ Sync Failed.');}catch(e){alert('❌ Could not connect. Run the python script first!');}})()
+  ```
+
+#### 2. Run the Script
+To fetch fresh files and analyze, open your terminal in the project root and run:
+```bash
+python scripts/IEPMS_Milestone_Analyzer.py --fetch --year 2026
+```
+
+#### 3. Instant 1-Click Sync
+* If your cookies are **missing or expired**, the script will pause and launch a temporary sync server in the background.
+* It will display a message in your terminal asking you to sync.
+* **Just open the ZTE IEPMS page in your browser and click your `Sync Auth` bookmark.**
+* The browser will pop up a success alert, the sync server will securely save the cookie to `scripts/api_auth.json`, and the terminal script will immediately resume, download the files, and output the report!
 
 ---
 

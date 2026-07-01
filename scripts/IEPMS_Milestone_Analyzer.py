@@ -6,6 +6,7 @@ import argparse
 import datetime
 import warnings
 import time
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # Suppress harmless openpyxl stylesheet warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
@@ -161,6 +162,87 @@ PROJECT_CONFIGS = {
     }
 }
 
+class AuthSyncHandler(BaseHTTPRequestHandler):
+    script_dir = None
+    server_instance = None
+    
+    def log_message(self, format, *args):
+        # Suppress logging HTTP requests to keep terminal clean
+        return
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+
+    def do_POST(self):
+        if self.path == "/sync":
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            
+            try:
+                auth_path = os.path.join(self.script_dir, "api_auth.json")
+                auth_data = {}
+                if os.path.exists(auth_path):
+                    with open(auth_path, 'r', encoding='utf-8') as f:
+                        auth_data = json.load(f)
+                
+                auth_data["cookie"] = post_data
+                auth_data["x_auth_value"] = "" # Automatically extracted in next run
+                auth_data["x_emp_no"] = "10265696"
+                
+                if "projects" not in auth_data:
+                    auth_data["projects"] = {
+                        "Malaysia_CelcomDigi_Project": { "projId": "c46633e8-6e52-2178-f17e-dcbfdade7cb2" },
+                        "CelcomDigi_MW": { "projId": "59e45f77-a828-6fa5-1701-dd6c4427df9d" }
+                    }
+                    
+                with open(auth_path, 'w', encoding='utf-8') as f:
+                    json.dump(auth_data, f, indent=4)
+                    
+                # Respond with CORS headers
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "success"}).encode('utf-8'))
+                
+                print("\n[SUCCESS] Authentication cookies synchronized successfully!")
+                self.server_instance.keep_running = False
+                
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(str(e).encode('utf-8'))
+
+def run_auth_server(script_dir):
+    class BindedHandler(AuthSyncHandler):
+        pass
+    BindedHandler.script_dir = script_dir
+    
+    server = HTTPServer(('localhost', 18290), BindedHandler)
+    BindedHandler.server_instance = server
+    server.keep_running = True
+    
+    print("\n=========================================================================")
+    print("🔑 AUTOMATIC AUTHENTICATION SYNC REQUIRED")
+    print("=========================================================================")
+    print("Your login session is expired or missing.")
+    print("A temporary local sync server has started on: http://localhost:18290")
+    print("\n👉 How to Sync in 1 Click:")
+    print("1. Open the ZTE IEPMS page in your browser.")
+    print("2. Click your 'Sync Auth' bookmarklet on your bookmarks bar.")
+    print("\n   Bookmarklet Code (copy & save as bookmark URL):")
+    print("   javascript:(async()=>{try{const r=await fetch('http://localhost:18290/sync',{method:'POST',body:document.cookie});const d=await r.json();if(d.status==='success')alert('🔒 ZTE EPMS Auth Sync Successful! Check your terminal.');else alert('❌ Sync Failed.');}catch(e){alert('❌ Could not connect. Run the python script first!');}})()")
+    print("=========================================================================\n")
+    print("Waiting for sync request...")
+    
+    while server.keep_running:
+        server.handle_request()
+
 def format_excel_cell(val):
     """
     Cleans cell data for identical output structure (keeps date formatting cleanly as YYYY-MM-DD)
@@ -184,14 +266,10 @@ def convert_xlsx_to_csv(xlsx_path, csv_path):
         return False
     try:
         df = pd.read_excel(xlsx_path, sheet_name=0, header=None)
-        
-        # Apply clean formatting element-wise
         if hasattr(df, 'map'):
             df = df.map(format_excel_cell)
         else:
             df = df.applymap(format_excel_cell)
-            
-        # Write with UTF-8 BOM encoding ('utf-8-sig') to match existing layout
         df.to_csv(csv_path, index=False, header=False, encoding='utf-8-sig')
         return True
     except Exception as e:
@@ -199,10 +277,6 @@ def convert_xlsx_to_csv(xlsx_path, csv_path):
         return False
 
 def check_and_convert_all_xlsx(input_dir, force_convert=False):
-    """
-    Scans the input directory for .xlsx files and converts them to .csv files
-    if they are newer than existing CSVs or if CSVs are missing.
-    """
     if pd is None:
         return
         
@@ -231,9 +305,6 @@ def check_and_convert_all_xlsx(input_dir, force_convert=False):
                 print("     SUCCESS")
 
 def auto_detect_mappings(input_dir):
-    """
-    Scans CSV files in input_dir and automatically maps milestones to column indices.
-    """
     csv_files = [f for f in os.listdir(input_dir) if f.endswith('.csv') and "test" not in f]
     detected_mappings = {}
 
@@ -303,58 +374,79 @@ def parse_year_month(val, target_year):
             return int(parts[1])
     return None
 
-def fetch_files_from_api(script_dir, input_dir):
+def execute_api_fetch_workflow(script_dir, input_dir):
     """
-    Triggers export tasks on ZTE EPMS, polls for status until 100%, 
-    and downloads Excel files directly to the input directory.
+    Executes the file fetching workflow. Returns True if successful.
+    If auth is expired, starts the sync server.
     """
-    if requests is None:
-        print("Error: 'requests' library is required to fetch files from API.")
-        return False
-        
     auth_path = os.path.join(script_dir, "api_auth.json")
     if not os.path.exists(auth_path):
-        # Create a template configuration file
-        template = {
-            "cookie": "RedirectedToNewiCenter=1; ZTEDPGSSOCookie=YOUR_SSO_TOKEN; ZTEDPGSSOUser=YOUR_EMP_NO; ...",
-            "x_auth_value": "",
-            "x_emp_no": "YOUR_EMP_NO",
-            "projects": {
-                "Malaysia_CelcomDigi_Project": {
-                    "projId": "c46633e8-6e52-2178-f17e-dcbfdade7cb2"
-                },
-                "CelcomDigi_MW": {
-                    "projId": "59e45f77-a828-6fa5-1701-dd6c4427df9d"
-                }
-            }
-        }
-        with open(auth_path, 'w', encoding='utf-8') as f:
-            json.dump(template, f, indent=4)
-        print("=========================================================================")
-        print("API AUTHENTICATION FILE NOT FOUND!")
-        print(f"Created a configuration template at: {auth_path}")
-        print("Please follow the README to populate Cookie and X-Auth-Value from F12 console.")
-        print("=========================================================================")
-        return False
-
+        run_auth_server(script_dir)
+        
+    # Load and parse cookies
     with open(auth_path, 'r', encoding='utf-8') as f:
         auth = json.load(f)
 
-    # Format cookies dictionary from raw string
     cookie_str = auth.get("cookie", "")
-    base_cookies = {}
+    cookies = {}
     for item in cookie_str.split(";"):
         if "=" in item:
             k, v = item.strip().split("=", 1)
-            base_cookies[k] = v
+            cookies[k] = v
 
-    # Extract X-Auth-Value from Cookie string automatically if not defined
+    # Validate auth token exists and test connectivity
     x_auth = auth.get("x_auth_value", "")
     if not x_auth or "YOUR_AUTH_VALUE" in x_auth:
-        # Fallback to ZTEDPGSSOCookie or UCSSSOToken from cookies
-        x_auth = base_cookies.get("ZTEDPGSSOCookie", base_cookies.get("UCSSSOToken", ""))
+        x_auth = cookies.get("ZTEDPGSSOCookie", cookies.get("UCSSSOToken", ""))
 
-    # Base headers
+    test_headers = {
+        'Accept': 'application/json',
+        'X-Auth-Value': x_auth,
+        'X-Emp-No': auth.get("x_emp_no", "10265696"),
+        'X-Lang-Id': 'en_US',
+        'X-Org-Id': '1',
+        'X-Tenant-Id': '10001',
+        'Internal': '1'
+    }
+    
+    test_params = {'operationType': 'EXPORT', 'pageNo': '1', 'pageSize': '1', 'bizType': 'SCHEDULE'}
+    record_url = "https://iepms.zte.com.cn/zte-crm-iepms-basebff/zte-crm-iepms-schedule/record"
+    
+    # Try connectivity
+    try:
+        r = requests.get(record_url, headers=test_headers, cookies=cookies, params=test_params, timeout=10)
+        # Check if auth failed (non-200 or indicates unauthorized error in JSON)
+        is_unauthorized = r.status_code != 200
+        if r.status_code == 200:
+            resp_json = r.json()
+            ret_code = resp_json.get("code", {}).get("code", "")
+            if ret_code != "0000":
+                is_unauthorized = True
+                
+        if is_unauthorized:
+            print("Authentication token is expired or unauthorized.")
+            run_auth_server(script_dir)
+            # Reload auth data after sync
+            with open(auth_path, 'r', encoding='utf-8') as f:
+                auth = json.load(f)
+    except Exception as e:
+        print(f"Connectivity test failed: {e}. Will attempt to start auth sync server.")
+        run_auth_server(script_dir)
+        with open(auth_path, 'r', encoding='utf-8') as f:
+            auth = json.load(f)
+
+    # 1. Prepare finalized headers and cookies
+    cookie_str = auth.get("cookie", "")
+    cookies = {}
+    for item in cookie_str.split(";"):
+        if "=" in item:
+            k, v = item.strip().split("=", 1)
+            cookies[k] = v
+
+    x_auth = auth.get("x_auth_value", "")
+    if not x_auth or "YOUR_AUTH_VALUE" in x_auth:
+        x_auth = cookies.get("ZTEDPGSSOCookie", cookies.get("UCSSSOToken", ""))
+
     base_headers = {
         'Accept': 'application/json, text/plain, */*',
         'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7,zh;q=0.6,ms;q=0.5',
@@ -364,7 +456,7 @@ def fetch_files_from_api(script_dir, input_dir):
         'Referer': 'https://iepms.zte.com.cn/zte-crm-iepms-scheduleui/',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36',
         'X-Auth-Value': x_auth,
-        'X-Emp-No': auth.get("x_emp_no", ""),
+        'X-Emp-No': auth.get("x_emp_no", "10265696"),
         'X-Lang-Id': 'en_US',
         'X-Org-Id': '1',
         'X-Origin-ServiceName': 'zte-crm-iepms-schedule',
@@ -373,11 +465,9 @@ def fetch_files_from_api(script_dir, input_dir):
     }
 
     export_url = "https://iepms.zte.com.cn/zte-crm-iepms-basebff/zte-crm-iepms-schedule/schedule/export"
-    record_url = "https://iepms.zte.com.cn/zte-crm-iepms-basebff/zte-crm-iepms-schedule/record"
     download_url = "https://iepms.zte.com.cn/zte-crm-iepms-basebff/zte-crm-iepms-schedule/record/download"
     
-    # Track files we need to download
-    pending_files = {}  # clean_name -> {pat, proj_id, headers, cookies}
+    pending_files = {}
     
     print("\n========================================================")
     print("STEP 1: SUBMITTING EXPORT TASKS TO ZTE EPMS API...")
@@ -389,24 +479,20 @@ def fetch_files_from_api(script_dir, input_dir):
             print(f"Skipping project {proj_key}: projId not configured.")
             continue
             
-        # Get matching static configs
         if proj_key not in PROJECT_CONFIGS:
             continue
             
         static_proj = PROJECT_CONFIGS[proj_key]
-        
-        # Prepare headers & cookies for this project context
         headers = base_headers.copy()
         headers['X-Itp-Value'] = f'timeZone=8;projId={proj_id}'
-        cookies = base_cookies.copy()
-        cookies['projId'] = proj_id
+        cookies_context = cookies.copy()
+        cookies_context['projId'] = proj_id
         
         for pat, file_cfg in static_proj["files"].items():
             clean_name = file_cfg["clean_name"]
             du_model_id = file_cfg["duModelId"]
             view_id = file_cfg["viewId"]
             
-            # Submit POST payload to trigger export
             payload = {
                 "clusterIdList": [],
                 "fieldQueryDTOList": [],
@@ -425,16 +511,15 @@ def fetch_files_from_api(script_dir, input_dir):
             
             print(f"  Submitting export task for '{pat}' (Project: {proj_key})...")
             try:
-                response = requests.post(export_url, headers=headers, cookies=cookies, json=payload, timeout=30)
+                response = requests.post(export_url, headers=headers, cookies=cookies_context, json=payload, timeout=30)
                 if response.status_code == 200:
                     print(f"    -> Export task submitted successfully.")
-                    # Add to queue for polling
                     pending_files[clean_name] = {
                         "pat": pat,
                         "proj_key": proj_key,
                         "projId": proj_id,
                         "headers": headers,
-                        "cookies": cookies
+                        "cookies": cookies_context
                     }
                 else:
                     print(f"    -> Warning: Export submission failed (HTTP {response.status_code}). Will try polling latest historical file.")
@@ -443,7 +528,7 @@ def fetch_files_from_api(script_dir, input_dir):
                         "proj_key": proj_key,
                         "projId": proj_id,
                         "headers": headers,
-                        "cookies": cookies
+                        "cookies": cookies_context
                     }
             except Exception as e:
                 print(f"    -> Error submitting export task: {e}. Will attempt historical backup.")
@@ -452,14 +537,13 @@ def fetch_files_from_api(script_dir, input_dir):
                     "proj_key": proj_key,
                     "projId": proj_id,
                     "headers": headers,
-                    "cookies": cookies
+                    "cookies": cookies_context
                 }
 
     print("\n========================================================")
     print("STEP 2: POLLING AND DOWNLOADING GENERATED EXCEL SHEETS...")
     print("========================================================")
     
-    # Poll up to 24 times (2 minutes max, 5 seconds sleep between polls)
     max_polls = 24
     poll_interval = 5
     
@@ -470,7 +554,6 @@ def fetch_files_from_api(script_dir, input_dir):
         print(f"\nPolling attempt {attempt + 1}/{max_polls} (waiting for {len(pending_files)} files)...")
         time.sleep(poll_interval)
         
-        # Group pending files by project to minimize /record queries
         projects_to_query = {}
         for clean_name, info in list(pending_files.items()):
             proj_id = info["projId"]
@@ -482,7 +565,6 @@ def fetch_files_from_api(script_dir, input_dir):
                 }
             projects_to_query[proj_id]["files"].append(clean_name)
             
-        # Perform query per project
         for proj_id, proj_data in projects_to_query.items():
             params = {
                 'operationType': 'EXPORT',
@@ -498,12 +580,10 @@ def fetch_files_from_api(script_dir, input_dir):
                     
                 rows = rec_resp.json().get("bo", {}).get("rows", [])
                 
-                # Check each pending file type for this project
                 for clean_name in list(proj_data["files"]):
                     info = pending_files[clean_name]
                     pat = info["pat"]
                     
-                    # Find latest matching record
                     matched_row = None
                     for row in rows:
                         file_name = row.get("fileName", "")
@@ -521,7 +601,6 @@ def fetch_files_from_api(script_dir, input_dir):
                             real_file_name = matched_row.get("fileName")
                             print(f"  [READY] '{pat}' is complete (Ticket: {ticket}). Downloading...")
                             
-                            # Perform download stream
                             dl_params = {'docId': file_id, 'fileName': real_file_name}
                             out_path = os.path.join(input_dir, f"{clean_name}.xlsx")
                             
@@ -596,7 +675,7 @@ def main():
     
     # 0. Fetch Excel files from API if requested
     if args.fetch:
-        success = fetch_files_from_api(script_dir, input_dir)
+        success = execute_api_fetch_workflow(script_dir, input_dir)
         if not success:
             print("Warning: API fetch failed or was incomplete. Continuing with existing files.")
     
