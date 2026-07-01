@@ -1,5 +1,5 @@
 ---
-name: analyze_iepms
+name: iepms-milestone-analyzer
 description: Auto-converts Excel sheets, maps column headers, and generates month-by-month milestone progress reports for IEPMS transmission projects. Can also download files directly from ZTE EPMS API using user cookies.
 tools:
   - execute_command
