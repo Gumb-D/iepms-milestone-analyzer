@@ -1,6 +1,6 @@
 ---
 name: iepms-milestone-analyzer
-description: Auto-converts Excel sheets, maps column headers, and generates month-by-month milestone progress reports for IEPMS transmission projects. Can also download files directly from ZTE EPMS API using user cookies.
+description: Auto-converts Excel sheets, maps column headers, and generates month-by-month milestone progress reports for IEPMS transmission projects. Downloads files directly from ZTE EPMS API using user cookies.
 tools:
   - execute_command
   - read_file
@@ -14,7 +14,7 @@ tools:
 
 ## 1. Parameter Extraction
 * Ask or look in the conversation context for the target **year** (e.g., `2026`). If not specified, default to `2026`.
-* Check if the user requested to **download**, **fetch**, or **pull** fresh files directly from the server. If so, set the `fetch_flag` to `--fetch`.
+* **Fetch Flag**: **Always default `fetch_flag` to `--fetch`** to guarantee that the agent always downloads the latest data from the ZTE EPMS portal, unless the user explicitly asks to run offline or use local files without fetching.
 
 ## 2. Command Execution
 Execute the Python analyzer CLI script using the `execute_command` tool. Run this command from the project root folder:
@@ -22,7 +22,7 @@ Execute the Python analyzer CLI script using the `execute_command` tool. Run thi
 ```bash
 python scripts/IEPMS_Milestone_Analyzer.py --year <target_year> <fetch_flag>
 ```
-*(For example, if the user requested to fetch first, run: `python scripts/IEPMS_Milestone_Analyzer.py --year 2026 --fetch`)*
+*(For example, since the agent always uses latest data by default, run: `python scripts/IEPMS_Milestone_Analyzer.py --year 2026 --fetch`)*
 
 * **Interactive Auth Sync Handling**:
   If the command outputs `Waiting for sync request...` (indicating the session cookies are missing or expired):
