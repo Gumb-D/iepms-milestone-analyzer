@@ -3,7 +3,7 @@
 This document defines the column header mappings used to extract milestone completion dates across all projects.
 
 > [!TIP]
-> These mappings can be manually adjusted by editing the config file at `D:\dev\projects\iepms\scripts\milestone_config.json`.
+> These mappings can be manually adjusted by editing the config file at `D:\dev\projects\iepms-milestone-analyzer\scripts\milestone_config.json`.
 
 ## 2023 TX Rollout
 

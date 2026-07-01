@@ -374,6 +374,44 @@ def parse_year_month(val, target_year):
             return int(parts[1])
     return None
 
+def parse_date_only(val):
+    val = val.strip()
+    if not val or val.lower() in ["null", "none"]:
+        return None
+    # Try different formats
+    for fmt in ('%Y-%m-%d', '%Y/%m/%d', '%Y-%m-%d %H:%M:%S', '%Y/%m/%d %H:%M:%S'):
+        try:
+            return datetime.datetime.strptime(val, fmt).date()
+        except ValueError:
+            pass
+    # Try extracting YYYY-MM-DD using regex
+    m = re.search(r'(\d{4})[-/](\d{1,2})[-/](\d{1,2})', val)
+    if m:
+        try:
+            return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            pass
+    return None
+
+def format_sla_row(kpi_name, stats):
+    met = stats["met"]
+    warn = stats["warn"]
+    breached = stats["breached"]
+    pending = stats["pending"]
+    total_completed = met + warn + breached
+    total_monitored = total_completed + pending
+    
+    if total_completed > 0:
+        compliance = ((met + warn) / total_completed) * 100
+        avg_days = stats["total_days"] / total_completed
+        compliance_str = f"**{compliance:.1f}%**"
+        avg_days_str = f"{avg_days:.1f}"
+    else:
+        compliance_str = "N/A"
+        avg_days_str = "N/A"
+        
+    return f"| {kpi_name} | {total_monitored} | {met} | {warn} | {breached} | {pending} | {compliance_str} | {avg_days_str} |"
+
 def execute_api_fetch_workflow(script_dir, input_dir):
     """
     Executes the file fetching workflow. Returns True if successful.
@@ -723,6 +761,13 @@ def main():
     combined_stats = {ms: {m: 0 for m in range(1, 13)} for ms in milestones}
     mappings_metadata = {}
     
+    file_sla_stats = {}
+    combined_sla_stats = {
+        "MC_MOS": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0},
+        "TI_L1": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0},
+        "MC_PAC": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0}
+    }
+    
     csv_files = [f for f in os.listdir(input_dir) if f.endswith('.csv') and f in mappings and "test" not in f]
     
     for f in csv_files:
@@ -732,6 +777,12 @@ def main():
         
         file_stats[friendly_name] = {ms: {m: 0 for m in range(1, 13)} for ms in milestones}
         mappings_metadata[friendly_name] = {}
+        
+        file_sla_stats[friendly_name] = {
+            "MC_MOS": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0},
+            "TI_L1": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0},
+            "MC_PAC": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0}
+        }
         
         try:
             with open(path, 'r', encoding='utf-8') as file:
@@ -763,6 +814,92 @@ def main():
                             if m and 1 <= m <= 12:
                                 file_stats[friendly_name][ms][m] += 1
                                 combined_stats[ms][m] += 1
+                                
+                # SLA processing for this project
+                mc_col = mappings[f].get("MC")
+                mos_col = mappings[f].get("MOS")
+                ti_col = mappings[f].get("TI")
+                l1_col = mappings[f].get("L1")
+                pac_col = mappings[f].get("PAC")
+                
+                for row in data_rows:
+                    mc_date = parse_date_only(row[mc_col]) if mc_col is not None and mc_col < len(row) else None
+                    mos_date = parse_date_only(row[mos_col]) if mos_col is not None and mos_col < len(row) else None
+                    ti_date = parse_date_only(row[ti_col]) if ti_col is not None and ti_col < len(row) else None
+                    l1_date = parse_date_only(row[l1_col]) if l1_col is not None and l1_col < len(row) else None
+                    pac_date = parse_date_only(row[pac_col]) if pac_col is not None and pac_col < len(row) else None
+                    
+                    # MC -> MOS
+                    if mc_date:
+                        if mos_date:
+                            dur = (mos_date - mc_date).days
+                            if dur < 0:
+                                dur = 0
+                            file_sla_stats[friendly_name]["MC_MOS"]["total_days"] += dur
+                            file_sla_stats[friendly_name]["MC_MOS"]["count"] += 1
+                            combined_sla_stats["MC_MOS"]["total_days"] += dur
+                            combined_sla_stats["MC_MOS"]["count"] += 1
+                            
+                            if dur < 10:
+                                file_sla_stats[friendly_name]["MC_MOS"]["met"] += 1
+                                combined_sla_stats["MC_MOS"]["met"] += 1
+                            elif dur <= 13:
+                                file_sla_stats[friendly_name]["MC_MOS"]["warn"] += 1
+                                combined_sla_stats["MC_MOS"]["warn"] += 1
+                            else:
+                                file_sla_stats[friendly_name]["MC_MOS"]["breached"] += 1
+                                combined_sla_stats["MC_MOS"]["breached"] += 1
+                        else:
+                            file_sla_stats[friendly_name]["MC_MOS"]["pending"] += 1
+                            combined_sla_stats["MC_MOS"]["pending"] += 1
+                            
+                    # TI -> L1
+                    if ti_date:
+                        if l1_date:
+                            dur = (l1_date - ti_date).days
+                            if dur < 0:
+                                dur = 0
+                            file_sla_stats[friendly_name]["TI_L1"]["total_days"] += dur
+                            file_sla_stats[friendly_name]["TI_L1"]["count"] += 1
+                            combined_sla_stats["TI_L1"]["total_days"] += dur
+                            combined_sla_stats["TI_L1"]["count"] += 1
+                            
+                            if dur < 10:
+                                file_sla_stats[friendly_name]["TI_L1"]["met"] += 1
+                                combined_sla_stats["TI_L1"]["met"] += 1
+                            elif dur <= 13:
+                                file_sla_stats[friendly_name]["TI_L1"]["warn"] += 1
+                                combined_sla_stats["TI_L1"]["warn"] += 1
+                            else:
+                                file_sla_stats[friendly_name]["TI_L1"]["breached"] += 1
+                                combined_sla_stats["TI_L1"]["breached"] += 1
+                        else:
+                            file_sla_stats[friendly_name]["TI_L1"]["pending"] += 1
+                            combined_sla_stats["TI_L1"]["pending"] += 1
+                            
+                    # MC -> PAC
+                    if mc_date:
+                        if pac_date:
+                            dur = (pac_date - mc_date).days
+                            if dur < 0:
+                                dur = 0
+                            file_sla_stats[friendly_name]["MC_PAC"]["total_days"] += dur
+                            file_sla_stats[friendly_name]["MC_PAC"]["count"] += 1
+                            combined_sla_stats["MC_PAC"]["total_days"] += dur
+                            combined_sla_stats["MC_PAC"]["count"] += 1
+                            
+                            if dur < 10:
+                                file_sla_stats[friendly_name]["MC_PAC"]["met"] += 1
+                                combined_sla_stats["MC_PAC"]["met"] += 1
+                            elif dur <= 13:
+                                file_sla_stats[friendly_name]["MC_PAC"]["warn"] += 1
+                                combined_sla_stats["MC_PAC"]["warn"] += 1
+                            else:
+                                file_sla_stats[friendly_name]["MC_PAC"]["breached"] += 1
+                                combined_sla_stats["MC_PAC"]["breached"] += 1
+                        else:
+                            file_sla_stats[friendly_name]["MC_PAC"]["pending"] += 1
+                            combined_sla_stats["MC_PAC"]["pending"] += 1
                                 
         except Exception as e:
             print(f"Error processing file {f}: {e}")
@@ -806,6 +943,30 @@ def main():
                 total = sum(m_counts)
                 f.write(f"| **{ms}** | " + " | ".join(map(str, m_counts)) + f" | **{total}** |\n")
             f.write("\n")
+
+        f.write("\n## 3. SLA & KPI Performance\n\n")
+        f.write("This section tracks the cycle-time durations and SLA compliance for three key execution milestones:\n")
+        f.write("* **MC ➔ MOS**: Material Collection to Material On Site (Target: < 14 days, Warning: 10-13 days)\n")
+        f.write("* **TI ➔ L1**: Telecom Installation to Q&EHS L1 Approved (Target: < 14 days, Warning: 10-13 days)\n")
+        f.write("* **MC ➔ PAC**: Material Collection to Preliminary Acceptance Certification (Target: < 14 days, Warning: 10-13 days)\n\n")
+        f.write("> [!NOTE]\n")
+        f.write("> Compliance % is calculated as `(Met + Warning) / (Met + Warning + Breached) * 100` representing completed tasks within the 14-day SLA limit.\n\n")
+        
+        f.write("### Combined SLA Performance (All Projects)\n\n")
+        f.write("| KPI Milestone | Monitored | Met (<10d) | Warning (10-13d) | Breached (≥14d) | Pending | Compliance % | Avg Days |\n")
+        f.write("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n")
+        f.write(format_sla_row("MC ➔ MOS", combined_sla_stats["MC_MOS"]) + "\n")
+        f.write(format_sla_row("TI ➔ L1", combined_sla_stats["TI_L1"]) + "\n")
+        f.write(format_sla_row("MC ➔ PAC", combined_sla_stats["MC_PAC"]) + "\n\n")
+        
+        f.write("### SLA Performance Breakdown by Project\n\n")
+        for name in file_sla_stats:
+            f.write(f"#### {name}\n\n")
+            f.write("| KPI Milestone | Monitored | Met (<10d) | Warning (10-13d) | Breached (≥14d) | Pending | Compliance % | Avg Days |\n")
+            f.write("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n")
+            f.write(format_sla_row("MC ➔ MOS", file_sla_stats[name]["MC_MOS"]) + "\n")
+            f.write(format_sla_row("TI ➔ L1", file_sla_stats[name]["TI_L1"]) + "\n")
+            f.write(format_sla_row("MC ➔ PAC", file_sla_stats[name]["MC_PAC"]) + "\n\n")
 
     print("\n========================================================")
     print("ANALYSIS COMPLETE!")
