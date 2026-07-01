@@ -51,6 +51,10 @@ After the command completes successfully:
 ## 4. Respond to the User
 Present the results in a clean, professional response:
 * **CRITICAL - Verbatim Tables**: You **MUST copy and print the markdown tables exactly as they are formatted inside the generated report file** (`output/Milestone_Progress_Report_<target_year>.md`). Do **NOT** summarize, compress, or rewrite the tables into custom formats, as this breaks markdown table rendering.
-* Print the **Combined Monthly Progress (All Projects)** table verbatim.
-* Print the **SLA & KPI Performance (Combined)** table verbatim.
+* **Progress Tables (Verbatim)**:
+  * Print the **Combined Monthly Progress (All Projects)** table verbatim.
+  * Print the **Progress Breakdown by Project** table verbatim for **EACH project** (so the user knows the project-level origin of the progress).
+* **SLA Performance Tables (Verbatim)**:
+  * Print the **Combined SLA Performance (All Projects)** table verbatim.
+  * Print the **SLA Performance Breakdown by Project** table verbatim for **EACH project**.
 * Summarize key observations and project-level performance highlights.
