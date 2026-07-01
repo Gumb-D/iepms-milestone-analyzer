@@ -5,6 +5,7 @@ import json
 import argparse
 import datetime
 import warnings
+import time
 
 # Suppress harmless openpyxl stylesheet warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
@@ -113,6 +114,50 @@ MILESTONE_KEYWORDS = {
     "PAC": {
         "primary": ["pac approved", "preliminary acceptance certification", "provisional acceptance"],
         "stage": ["preliminary/provisional", "acceptance certification", "pac work complete"]
+    }
+}
+
+# Static view IDs and model IDs for triggering export tasks
+PROJECT_CONFIGS = {
+    "CD_BAU_Project": {
+        "projId": "c46633e8-6e52-2178-f17e-dcbfdade7cb2",
+        "files": {
+            "2023 TX Rollout": {
+                "clean_name": "2023_TX_Rollout",
+                "duModelId": "1027190858144623081",
+                "viewId": "8043814649254951526"
+            },
+            "2024 Celcomdigi BAU": {
+                "clean_name": "2024_Celcomdigi_BAU",
+                "duModelId": "7278317398457076992",
+                "viewId": "4729280009710993817"
+            },
+            "Jendela TX Migration": {
+                "clean_name": "Jendela_TX_Migration",
+                "duModelId": "4972593269368006257",
+                "viewId": "6638925130999114751"
+            },
+            "TX Mini Project": {
+                "clean_name": "TX_Mini_Project",
+                "duModelId": "4188808420049567786",
+                "viewId": "2540490949868649705"
+            }
+        }
+    },
+    "ZTE_Mini_Project": {
+        "projId": "59e45f77-a828-6fa5-1701-dd6c4427df9d",
+        "files": {
+            "MW EOS Swap": {
+                "clean_name": "MW_EOS_Swap",
+                "duModelId": "5440935430300168497",
+                "viewId": "7476572371505372260"
+            },
+            "ZTE TX MINI": {
+                "clean_name": "ZTE_TX_MINI",
+                "duModelId": "8638668101234290847",
+                "viewId": "2279585426760368522"
+            }
+        }
     }
 }
 
@@ -260,8 +305,8 @@ def parse_year_month(val, target_year):
 
 def fetch_files_from_api(script_dir, input_dir):
     """
-    Downloads Excel files directly from ZTE EPMS API using headers, cookies and config
-    defined in scripts/api_auth.json.
+    Triggers export tasks on ZTE EPMS, polls for status until 100%, 
+    and downloads Excel files directly to the input directory.
     """
     if requests is None:
         print("Error: 'requests' library is required to fetch files from API.")
@@ -276,20 +321,10 @@ def fetch_files_from_api(script_dir, input_dir):
             "x_emp_no": "YOUR_EMP_NO",
             "projects": {
                 "CD_BAU_Project": {
-                    "projId": "c46633e8-6e52-2178-f17e-dcbfdade7cb2",
-                    "files": {
-                        "2023 TX Rollout": "2023_TX_Rollout",
-                        "2024 Celcomdigi BAU": "2024_Celcomdigi_BAU",
-                        "Jendela TX Migration": "Jendela_TX_Migration",
-                        "TX Mini Project": "TX_Mini_Project"
-                    }
+                    "projId": "c46633e8-6e52-2178-f17e-dcbfdade7cb2"
                 },
                 "ZTE_Mini_Project": {
-                    "projId": "PASTE_YOUR_ZTE_PROJECT_PROJID_HERE",
-                    "files": {
-                        "MW EOS Swap": "MW_EOS_Swap",
-                        "ZTE TX MINI": "ZTE_TX_MINI"
-                    }
+                    "projId": "59e45f77-a828-6fa5-1701-dd6c4427df9d"
                 }
             }
         }
@@ -306,10 +341,11 @@ def fetch_files_from_api(script_dir, input_dir):
         auth = json.load(f)
 
     # Base headers
-    headers = {
+    base_headers = {
         'Accept': 'application/json, text/plain, */*',
         'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7,zh;q=0.6,ms;q=0.5',
         'Connection': 'keep-alive',
+        'Content-Type': 'application/json',
         'Internal': '1',
         'Referer': 'https://iepms.zte.com.cn/zte-crm-iepms-scheduleui/',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36',
@@ -322,84 +358,196 @@ def fetch_files_from_api(script_dir, input_dir):
         'X-Tenant-Id': '10001'
     }
 
-    # Format cookies dictionary from the raw string
+    # Format cookies dictionary from raw string
     cookie_str = auth.get("cookie", "")
-    cookies = {}
+    base_cookies = {}
     for item in cookie_str.split(";"):
         if "=" in item:
             k, v = item.strip().split("=", 1)
-            cookies[k] = v
+            base_cookies[k] = v
 
-    print("Fetching export records list from ZTE EPMS API...")
+    export_url = "https://iepms.zte.com.cn/zte-crm-iepms-basebff/zte-crm-iepms-schedule/schedule/export"
     record_url = "https://iepms.zte.com.cn/zte-crm-iepms-basebff/zte-crm-iepms-schedule/record"
     download_url = "https://iepms.zte.com.cn/zte-crm-iepms-basebff/zte-crm-iepms-schedule/record/download"
     
-    success_count = 0
+    # Track files we need to download
+    pending_files = {}  # clean_name -> {pat, proj_id, headers, cookies}
     
-    for proj_name, proj_cfg in auth.get("projects", {}).items():
-        proj_id = proj_cfg.get("projId")
+    print("\n========================================================")
+    print("STEP 1: SUBMITTING EXPORT TASKS TO ZTE EPMS API...")
+    print("========================================================")
+    
+    for proj_key, proj_info in auth.get("projects", {}).items():
+        proj_id = proj_info.get("projId")
         if not proj_id or "PASTE" in proj_id:
-            print(f"Skipping project {proj_name}: project ID (projId) is not configured.")
+            print(f"Skipping project {proj_key}: projId not configured.")
             continue
             
-        print(f"\nProcessing project: {proj_name} (ID: {proj_id})...")
+        # Get matching static configs
+        if proj_key not in PROJECT_CONFIGS:
+            continue
+            
+        static_proj = PROJECT_CONFIGS[proj_key]
         
-        # Override project ID in request context headers and cookies
+        # Prepare headers & cookies for this project context
+        headers = base_headers.copy()
         headers['X-Itp-Value'] = f'timeZone=8;projId={proj_id}'
+        cookies = base_cookies.copy()
         cookies['projId'] = proj_id
         
-        params = {
-            'operationType': 'EXPORT',
-            'pageNo': '1',
-            'pageSize': '20',
-            'bizType': 'SCHEDULE'
-        }
-        
-        try:
-            response = requests.get(record_url, headers=headers, cookies=cookies, params=params, timeout=30)
-            if response.status_code != 200:
-                print(f"  Error: Failed to fetch record list (HTTP {response.status_code})")
-                continue
-                
-            data = response.json()
-            rows = data.get("bo", {}).get("rows", [])
+        for pat, file_cfg in static_proj["files"].items():
+            clean_name = file_cfg["clean_name"]
+            du_model_id = file_cfg["duModelId"]
+            view_id = file_cfg["viewId"]
             
-            # Look for matching target files
-            for pat, target_name in proj_cfg.get("files", {}).items():
-                print(f"  Searching export record matching pattern '{pat}'...")
-                matched_row = None
-                for row in rows:
-                    file_name = row.get("fileName", "")
-                    status = row.get("status", "")
-                    if pat in file_name and status == "SUCCESS":
-                        matched_row = row
-                        break
-                        
-                if not matched_row:
-                    print(f"    -> Warning: No completed export record found for '{pat}'!")
+            # Submit POST payload to trigger export
+            payload = {
+                "clusterIdList": [],
+                "fieldQueryDTOList": [],
+                "phaseIdList": [],
+                "regionIdList": [],
+                "siteKeyList": [],
+                "duCode": "",
+                "duName": "",
+                "duModelId": du_model_id,
+                "duStatus": "ENABLED",
+                "pageNum": 1,
+                "pageSize": 20,
+                "searchType": "HIGH",
+                "viewId": view_id
+            }
+            
+            print(f"  Submitting export task for '{pat}' (Project: {proj_key})...")
+            try:
+                response = requests.post(export_url, headers=headers, cookies=cookies, json=payload, timeout=30)
+                if response.status_code == 200:
+                    print(f"    -> Export task submitted successfully.")
+                    # Add to queue for polling
+                    pending_files[clean_name] = {
+                        "pat": pat,
+                        "proj_key": proj_key,
+                        "projId": proj_id,
+                        "headers": headers,
+                        "cookies": cookies
+                    }
+                else:
+                    print(f"    -> Warning: Export submission failed (HTTP {response.status_code}). Will try polling latest historical file.")
+                    # Still try to poll/download historical file
+                    pending_files[clean_name] = {
+                        "pat": pat,
+                        "proj_key": proj_key,
+                        "projId": proj_id,
+                        "headers": headers,
+                        "cookies": cookies
+                    }
+            except Exception as e:
+                print(f"    -> Error submitting export task: {e}. Will attempt historical backup.")
+                pending_files[clean_name] = {
+                    "pat": pat,
+                    "proj_key": proj_key,
+                    "projId": proj_id,
+                    "headers": headers,
+                    "cookies": cookies
+                }
+
+    print("\n========================================================")
+    print("STEP 2: POLLING AND DOWNLOADING GENERATED EXCEL SHEETS...")
+    print("========================================================")
+    
+    # Poll up to 24 times (2 minutes max, 5 seconds sleep between polls)
+    max_polls = 24
+    poll_interval = 5
+    
+    for attempt in range(max_polls):
+        if not pending_files:
+            break
+            
+        print(f"\nPolling attempt {attempt + 1}/{max_polls} (waiting for {len(pending_files)} files)...")
+        time.sleep(poll_interval)
+        
+        # Group pending files by project to minimize /record queries
+        projects_to_query = {}
+        for clean_name, info in list(pending_files.items()):
+            proj_id = info["projId"]
+            if proj_id not in projects_to_query:
+                projects_to_query[proj_id] = {
+                    "headers": info["headers"],
+                    "cookies": info["cookies"],
+                    "files": []
+                }
+            projects_to_query[proj_id]["files"].append(clean_name)
+            
+        # Perform query per project
+        for proj_id, proj_data in projects_to_query.items():
+            params = {
+                'operationType': 'EXPORT',
+                'pageNo': '1',
+                'pageSize': '20',
+                'bizType': 'SCHEDULE'
+            }
+            
+            try:
+                rec_resp = requests.get(record_url, headers=proj_data["headers"], cookies=proj_data["cookies"], params=params, timeout=30)
+                if rec_resp.status_code != 200:
                     continue
                     
-                file_id = matched_row.get("fileId")
-                real_file_name = matched_row.get("fileName")
-                print(f"    -> Found completed export: {real_file_name} (ID: {file_id})")
+                rows = rec_resp.json().get("bo", {}).get("rows", [])
                 
-                # Download
-                dl_params = {'docId': file_id, 'fileName': real_file_name}
-                out_path = os.path.join(input_dir, f"{target_name}.xlsx")
+                # Check each pending file type for this project
+                for clean_name in list(proj_data["files"]):
+                    info = pending_files[clean_name]
+                    pat = info["pat"]
+                    
+                    # Find latest matching record
+                    matched_row = None
+                    for row in rows:
+                        file_name = row.get("fileName", "")
+                        if pat in file_name:
+                            matched_row = row
+                            break
+                            
+                    if matched_row:
+                        status = matched_row.get("status")
+                        progress = matched_row.get("schedule")
+                        ticket = matched_row.get("operationNo")
+                        
+                        if status == "SUCCESS" and progress == 100:
+                            file_id = matched_row.get("fileId")
+                            real_file_name = matched_row.get("fileName")
+                            print(f"  [READY] '{pat}' is complete (Ticket: {ticket}). Downloading...")
+                            
+                            # Perform download stream
+                            dl_params = {'docId': file_id, 'fileName': real_file_name}
+                            out_path = os.path.join(input_dir, f"{clean_name}.xlsx")
+                            
+                            try:
+                                with requests.get(download_url, headers=proj_data["headers"], cookies=proj_data["cookies"], params=dl_params, stream=True, timeout=60) as r:
+                                    r.raise_for_status()
+                                    with open(out_path, 'wb') as f_out:
+                                        for chunk in r.iter_content(chunk_size=8192):
+                                            f_out.write(chunk)
+                                print(f"    -> SUCCESS: Saved {clean_name}.xlsx")
+                                # Remove from pending
+                                del pending_files[clean_name]
+                            except Exception as e:
+                                print(f"    -> Download failed: {e}")
+                        elif status in ["FAIL", "ERROR"]:
+                            print(f"  [FAILED] '{pat}' failed on server. Removing from auto-download queue.")
+                            del pending_files[clean_name]
+                        else:
+                            print(f"  [ONGOING] '{pat}' is still generating on server ({progress}%).")
+                            
+            except Exception as e:
+                print(f"  Error polling records for project ID {proj_id}: {e}")
                 
-                print(f"    -> Downloading: {target_name}.xlsx...")
-                with requests.get(download_url, headers=headers, cookies=cookies, params=dl_params, stream=True, timeout=60) as r:
-                    r.raise_for_status()
-                    with open(out_path, 'wb') as f:
-                        for chunk in r.iter_content(chunk_size=8192):
-                            f.write(chunk)
-                print(f"    -> SUCCESS: Saved to {out_path}")
-                success_count += 1
-                
-        except Exception as e:
-            print(f"  Error querying or downloading files for project {proj_name}: {e}")
-            
-    return success_count > 0
+    if pending_files:
+        print("\nWarning: The following files timed out or failed to export:")
+        for clean_name in pending_files:
+            print(f"  - {clean_name}")
+        return False
+        
+    print("\nAll files successfully downloaded!")
+    return True
 
 def main():
     # Resolve project root dynamically (parent of scripts/)
