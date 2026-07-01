@@ -24,9 +24,20 @@ python D:/dev/projects/iepms/scripts/IEPMS_Milestone_Analyzer.py --year <target_
 
 * **Interactive Auth Sync Handling**:
   If the command outputs `Waiting for sync request...` (indicating the session cookies are missing or expired):
-  1. STOP execution.
-  2. Ask the user in the chat: *"Please open the ZTE IEPMS page in your browser and click your 'Sync Auth' bookmarklet to refresh your session."*
-  3. The local server running inside the python script will receive the sync request automatically, write the credentials to `scripts/api_auth.json`, shut down, and resume downloading the files.
+  
+  * **Option A: Headless Browser Extraction (Fully Automated)**:
+    If your agent runtime is equipped with browser automation capabilities (e.g. Playwright, Puppeteer, `read_browser_page`, `open_browser`):
+    1. Navigate to the ZTE IEPMS page: `https://iepms.zte.com.cn`.
+    2. Wait for auto-authentication (SSO/VPN) to complete.
+    3. Evaluate `document.cookie` on the page to retrieve the cookies.
+    4. Write the cookies directly to `D:/dev/projects/iepms/scripts/api_auth.json` under the `"cookie"` key.
+    5. Re-run the analyzer command. It will bypass the sync server and succeed immediately.
+    
+  * **Option B: Bookmarklet Sync (User Interaction)**:
+    If browser tools are not available:
+    1. STOP execution.
+    2. Ask the user in the chat: *"Please open the ZTE IEPMS page in your browser and click your 'Sync Auth' bookmarklet to refresh your session."*
+    3. The local server running inside the python script will receive the sync request automatically, write the credentials to `scripts/api_auth.json`, shut down, and resume downloading the files.
 
 ## 3. Read and Process Outputs
 After the command completes successfully:
