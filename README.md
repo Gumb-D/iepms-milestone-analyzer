@@ -107,6 +107,22 @@ The analyzer maps the project milestones to the following columns:
 
 ---
 
+## ⏱️ SLA & KPI Cycle-Time Monitoring
+
+The script automatically calculates completion durations row-by-row for the following key execution intervals:
+1. **MC ➔ MOS** (Material Collection to Material On Site)
+2. **TI ➔ L1** (Telecom Installation to Q&EHS L1 Approval)
+3. **MC ➔ PAC** (Material Collection to Preliminary Acceptance Certification)
+
+### SLA Compliance Metric Rules
+* **Met**: Cycle time was **less than 10 days** (0 to 9 days).
+* **Warning**: Cycle time was **between 10 and 13 days** (10 to 13 days).
+* **Breached**: Cycle time took **14 days or longer** (≥ 14 days).
+* **Pending**: The start milestone has occurred, but the target milestone is still empty.
+* **SLA Compliance %**: Calculated as `(Met + Warning) / (Met + Warning + Breached) * 100` (representing total completed tasks completed within the 14-day limit).
+
+---
+
 ## ⚙️ Decoupling Configuration from Code
 
 The column mappings are stored in `scripts/milestone_config.json`. If any mapping needs manual refinement:
