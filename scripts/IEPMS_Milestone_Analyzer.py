@@ -119,7 +119,7 @@ MILESTONE_KEYWORDS = {
 
 # Static view IDs and model IDs for triggering export tasks
 PROJECT_CONFIGS = {
-    "CD_BAU_Project": {
+    "Malaysia_CelcomDigi_Project": {
         "projId": "c46633e8-6e52-2178-f17e-dcbfdade7cb2",
         "files": {
             "2023 TX Rollout": {
@@ -144,7 +144,7 @@ PROJECT_CONFIGS = {
             }
         }
     },
-    "ZTE_Mini_Project": {
+    "CelcomDigi_MW": {
         "projId": "59e45f77-a828-6fa5-1701-dd6c4427df9d",
         "files": {
             "MW EOS Swap": {
@@ -320,10 +320,10 @@ def fetch_files_from_api(script_dir, input_dir):
             "x_auth_value": "YOUR_AUTH_VALUE_FROM_F12_HEADERS",
             "x_emp_no": "YOUR_EMP_NO",
             "projects": {
-                "CD_BAU_Project": {
+                "Malaysia_CelcomDigi_Project": {
                     "projId": "c46633e8-6e52-2178-f17e-dcbfdade7cb2"
                 },
-                "ZTE_Mini_Project": {
+                "CelcomDigi_MW": {
                     "projId": "59e45f77-a828-6fa5-1701-dd6c4427df9d"
                 }
             }
@@ -432,7 +432,6 @@ def fetch_files_from_api(script_dir, input_dir):
                     }
                 else:
                     print(f"    -> Warning: Export submission failed (HTTP {response.status_code}). Will try polling latest historical file.")
-                    # Still try to poll/download historical file
                     pending_files[clean_name] = {
                         "pat": pat,
                         "proj_key": proj_key,
@@ -527,7 +526,6 @@ def fetch_files_from_api(script_dir, input_dir):
                                         for chunk in r.iter_content(chunk_size=8192):
                                             f_out.write(chunk)
                                 print(f"    -> SUCCESS: Saved {clean_name}.xlsx")
-                                # Remove from pending
                                 del pending_files[clean_name]
                             except Exception as e:
                                 print(f"    -> Download failed: {e}")
