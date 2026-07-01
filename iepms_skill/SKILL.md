@@ -1,6 +1,6 @@
 ---
 name: analyze_iepms
-description: Auto-converts Excel sheets, maps column headers, and generates month-by-month milestone progress reports for IEPMS transmission projects.
+description: Auto-converts Excel sheets, maps column headers, and generates month-by-month milestone progress reports for IEPMS transmission projects. Can also download files directly from ZTE EPMS API using user cookies.
 tools:
   - execute_command
   - read_file
@@ -8,19 +8,21 @@ tools:
 
 # Instruction Playbook: Analyze IEPMS Milestone Data
 
-Follow these instructions whenever the user asks to analyze IEPMS project files, compile milestone progress, or generate a half-year/yearly report.
+Follow these instructions whenever the user asks to analyze IEPMS project files, compile milestone progress, or generate a report.
 
 ## 1. Parameter Extraction
 * Ask or look in the conversation context for the target **year** (e.g., `2026`). If not specified, default to `2026`.
+* Check if the user requested to **download**, **fetch**, or **pull** fresh files directly from the server. If so, set the `fetch_flag` to `--fetch`.
 
 ## 2. Command Execution
 Execute the Python analyzer CLI script using the `execute_command` tool. Run this command from the project root folder `D:/dev/projects/iepms`:
 
 ```bash
-python D:/dev/projects/iepms/scripts/IEPMS_Milestone_Analyzer.py --year <target_year>
+python D:/dev/projects/iepms/scripts/IEPMS_Milestone_Analyzer.py --year <target_year> <fetch_flag>
 ```
+*(For example, if the user requested to fetch first, run: `python D:/dev/projects/iepms/scripts/IEPMS_Milestone_Analyzer.py --year 2026 --fetch`)*
 
-*Note: The script automatically handles converting Excel (.xlsx) files inside `D:/dev/projects/iepms/input/` to CSV if they are missing or outdated, and saves configuration mapping in `D:/dev/projects/iepms/scripts/milestone_config.json`.*
+*Note: The script automatically handles loading cookies from `D:/dev/projects/iepms/scripts/api_auth.json` to perform API calls, downloading files, converting Excel (.xlsx) files to CSV, and saving config mappings.*
 
 ## 3. Read and Process Outputs
 After the command completes successfully:
@@ -33,4 +35,4 @@ After the command completes successfully:
 Present the results in a clean, professional response:
 * Provide a brief confirmation of the files analyzed and column mappings.
 * Display the **Combined Monthly Progress** table for the requested year.
-* Highlight key progress metrics, such as the total Integration (RFS) count year-to-date (YTD) or any major milestone spikes (e.g. PAC in March).
+* Highlight key progress metrics, such as the total Integration (RFS) count year-to-date (YTD) or any major milestone spikes.

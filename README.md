@@ -8,6 +8,7 @@ This workspace is organized into dedicated subdirectories to isolate data inputs
 * **`scripts/`**: Contains the executable scripts and configuration files:
   * `IEPMS_Milestone_Analyzer.py`: The main analyzer tool.
   * `milestone_config.json`: Decoupled column mapping configuration.
+  * `api_auth.json`: Active API authentication headers/cookies (never pushed to git).
   * `Convert-XlsxToCsv.ps1` / `.lnk`: PowerShell converter backups.
 * **`output/`**: Contains the generated monthly progress reports (e.g. `Milestone_Progress_Report_2026.md`).
 * **`docs/`**: Contains `milestone_mappings.md` (documenting column headers).
@@ -18,31 +19,34 @@ This workspace is organized into dedicated subdirectories to isolate data inputs
 
 ## 📖 Operation Guide (Step-by-Step Workflow)
 
-Follow these steps for routine data updates and report generation:
+There are two ways to operate the tool: **Manual Mode** (where you copy files yourself) and **Automated Fetch Mode** (where the script pulls data directly from the ZTE EPMS API).
 
-### Step 1: Place New Project Files in `input/`
-When you receive updated Excel workbooks (`.xlsx`) or CSV sheets (`.csv`) for your projects:
-1. Open the **`input/`** folder.
-2. Copy the new files into this folder, overwriting the old files (keep the original filenames identical so the script knows which project configuration to apply).
-   * *Note: You can copy either `.xlsx` or `.csv` files. The tool handles both formats.*
+### Option A: Manual Mode (Copy & Run)
+1. **Place new files**: Download the Excel sheets manually, rename them to clean, normalized names (e.g., `2023_TX_Rollout.xlsx`), and place them in the **`input/`** folder.
+2. **Run analysis**: Open your terminal in the project root and run:
+   ```bash
+   python scripts/IEPMS_Milestone_Analyzer.py --year 2026
+   ```
 
-### Step 2: Run the Analyzer Script
-Open your terminal (PowerShell, Command Prompt, or Git Bash) in the project root folder (`C:\temp\iepms`) and execute the following command:
-```bash
-python scripts/IEPMS_Milestone_Analyzer.py
-```
-This runs the default H1/Full-Year analysis for the year **2026**.
+---
 
-* **What happens behind the scenes:**
-  1. The script checks the **`input/`** folder for any `.xlsx` files.
-  2. If a `.csv` version is missing or is older than the `.xlsx` file, the script automatically converts it to `.csv` with exact UTF-8 BOM encoding.
-  3. The script loads mappings from **`scripts/milestone_config.json`**.
-  4. It processes the CSV files and aggregates completion counts month-by-month.
+### Option B: Automated Fetch Mode (Direct API download) 🚀
+Instead of manually exporting, renaming, and copying the files, the script can query and download the completed sheets directly from the ZTE EPMS servers:
 
-### Step 3: Retrieve and Review Reports
-Once the command completes, you will find your outputs ready:
-* **Progress Report**: Open **`output/Milestone_Progress_Report_2026.md`** to view the combined progress table and individual project breakdown tables.
-* **Column Mappings**: Open **`docs/milestone_mappings.md`** to verify which exact columns were analyzed.
+1. **Submit the Export**: Log into the ZTE IEPMS portal and click **Export** on the project sheets you want to update (this schedules the export tasks on the server).
+2. **Grab Authentication Headers**:
+   * Open Developer Tools (**F12**), select the **Network** tab, and click "Download" on any completed export sheet in the "View Export Result" modal.
+   * Right-click the download network request, select **Copy as cURL**, and locate the `Cookie` string and the `X-Auth-Value` header.
+3. **Save Credentials**:
+   * Create or open **`scripts/api_auth.json`** (if it doesn't exist, run `python scripts/IEPMS_Milestone_Analyzer.py --fetch` once to generate a template).
+   * Paste your active **`cookie`** string and **`x_auth_value`** into the JSON file.
+   * *(Optional)* If you want to download ZTE Project files (`MW_EOS_Swap` and `ZTE_TX_MINI`), switch to that project in the browser, copy its `projId` from the request headers, and paste it under the `ZTE_Mini_Project` section in `scripts/api_auth.json`.
+4. **Run Automated Fetch & Analyze**:
+   Run the script with the `--fetch` flag:
+   ```bash
+   python scripts/IEPMS_Milestone_Analyzer.py --fetch --year 2026
+   ```
+   *The script will query your export records list, identify the latest completed file for each project, download them to `input/`, convert them, and compile the progress report in one step!*
 
 ---
 
@@ -56,6 +60,10 @@ python scripts/IEPMS_Milestone_Analyzer.py
 
 ### 🔧 Custom Controls & Arguments
 
+* **Fetch and Analyze**:
+  ```bash
+  python scripts/IEPMS_Milestone_Analyzer.py --fetch --year 2026
+  ```
 * **Run for a Different Year (e.g., 2025)**:
   ```bash
   python scripts/IEPMS_Milestone_Analyzer.py --year 2025
@@ -69,7 +77,7 @@ python scripts/IEPMS_Milestone_Analyzer.py
   python scripts/IEPMS_Milestone_Analyzer.py --no-convert
   ```
 * **Force Auto-detect Column Headers**:
-  If the CSV file layouts have changed or new files have been added, force the tool to re-scan the headers (this will overwrite `scripts/milestone_config.json`):
+  If the sheet layouts change and you want the script to re-detect columns:
   ```bash
   python scripts/IEPMS_Milestone_Analyzer.py --force-detect
   ```

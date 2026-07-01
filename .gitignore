@@ -4,8 +4,9 @@ input/
 # Ignore generated reports
 output/
 
-# Ignore local configuration files
+# Ignore local configuration and authentication files
 scripts/milestone_config.json
+scripts/api_auth.json
 
 # System files
 .DS_Store

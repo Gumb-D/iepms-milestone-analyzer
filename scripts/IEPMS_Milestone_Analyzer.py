@@ -11,12 +11,14 @@ warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 try:
     import pandas as pd
+    import requests
 except ImportError:
     pd = None
+    requests = None
 
-# Manually verified column mappings for the 6 known CSV files
+# Manually verified column mappings for the 6 clean CSV files
 VERIFIED_MAPPINGS = {
-    "A-P202202168750_D002-2023 TX Rollout-TX Rollout V2-20260630090904.csv": {
+    "2023_TX_Rollout.csv": {
         "SOW": 82,
         "TSS": 132,
         "MC": 205,
@@ -26,7 +28,7 @@ VERIFIED_MAPPINGS = {
         "RFS": 230,
         "PAC": 310
     },
-    "A-P202202168750_D002-2024 Celcomdigi BAU-2024 BAU Rollout-20260630092745.csv": {
+    "2024_Celcomdigi_BAU.csv": {
         "SOW": 182,
         "TSS": 47,
         "MC": 51,
@@ -36,7 +38,7 @@ VERIFIED_MAPPINGS = {
         "RFS": 163,
         "PAC": 73
     },
-    "A-P202202168750_D002-Jendela TX Migration-默认视图-20260630092741.csv": {
+    "Jendela_TX_Migration.csv": {
         "SOW": 538,
         "TSS": 14,
         "MC": 64,
@@ -46,7 +48,7 @@ VERIFIED_MAPPINGS = {
         "RFS": 143,
         "PAC": 281
     },
-    "A-P202202168750_D002-TX Mini Project-TX Mini Project v1-20260630090718.csv": {
+    "TX_Mini_Project.csv": {
         "SOW": 250,
         "TSS": 70,
         "MC": 96,
@@ -56,7 +58,7 @@ VERIFIED_MAPPINGS = {
         "RFS": 119,
         "PAC": 222
     },
-    "A-P202211283695_D002-MW EOS Swap-MW EOS Swap Rollout-20260630091513.csv": {
+    "MW_EOS_Swap.csv": {
         "SOW": 248,
         "TSS": 110,
         "MC": 140,
@@ -66,7 +68,7 @@ VERIFIED_MAPPINGS = {
         "RFS": 167,
         "PAC": 233
     },
-    "A-P202211283695_D002-ZTE TX MINI-ZTE TX MINI v1-20260630091518.csv": {
+    "ZTE_TX_MINI.csv": {
         "SOW": 10,
         "TSS": 43,
         "MC": 109,
@@ -159,7 +161,7 @@ def check_and_convert_all_xlsx(input_dir, force_convert=False):
     if pd is None:
         return
         
-    xlsx_files = [f for f in os.listdir(input_dir) if f.endswith('.xlsx')]
+    xlsx_files = [f for f in os.listdir(input_dir) if f.endswith('.xlsx') and "test" not in f]
     if not xlsx_files:
         return
         
@@ -187,7 +189,7 @@ def auto_detect_mappings(input_dir):
     """
     Scans CSV files in input_dir and automatically maps milestones to column indices.
     """
-    csv_files = [f for f in os.listdir(input_dir) if f.endswith('.csv')]
+    csv_files = [f for f in os.listdir(input_dir) if f.endswith('.csv') and "test" not in f]
     detected_mappings = {}
 
     for f in csv_files:
@@ -256,6 +258,149 @@ def parse_year_month(val, target_year):
             return int(parts[1])
     return None
 
+def fetch_files_from_api(script_dir, input_dir):
+    """
+    Downloads Excel files directly from ZTE EPMS API using headers, cookies and config
+    defined in scripts/api_auth.json.
+    """
+    if requests is None:
+        print("Error: 'requests' library is required to fetch files from API.")
+        return False
+        
+    auth_path = os.path.join(script_dir, "api_auth.json")
+    if not os.path.exists(auth_path):
+        # Create a template configuration file
+        template = {
+            "cookie": "RedirectedToNewiCenter=1; ZTEDPGSSOCookie=YOUR_SSO_TOKEN; ZTEDPGSSOUser=YOUR_EMP_NO; ...",
+            "x_auth_value": "YOUR_AUTH_VALUE_FROM_F12_HEADERS",
+            "x_emp_no": "YOUR_EMP_NO",
+            "projects": {
+                "CD_BAU_Project": {
+                    "projId": "c46633e8-6e52-2178-f17e-dcbfdade7cb2",
+                    "files": {
+                        "2023 TX Rollout": "2023_TX_Rollout",
+                        "2024 Celcomdigi BAU": "2024_Celcomdigi_BAU",
+                        "Jendela TX Migration": "Jendela_TX_Migration",
+                        "TX Mini Project": "TX_Mini_Project"
+                    }
+                },
+                "ZTE_Mini_Project": {
+                    "projId": "PASTE_YOUR_ZTE_PROJECT_PROJID_HERE",
+                    "files": {
+                        "MW EOS Swap": "MW_EOS_Swap",
+                        "ZTE TX MINI": "ZTE_TX_MINI"
+                    }
+                }
+            }
+        }
+        with open(auth_path, 'w', encoding='utf-8') as f:
+            json.dump(template, f, indent=4)
+        print("=========================================================================")
+        print("API AUTHENTICATION FILE NOT FOUND!")
+        print(f"Created a configuration template at: {auth_path}")
+        print("Please follow the README to populate Cookie and X-Auth-Value from F12 console.")
+        print("=========================================================================")
+        return False
+
+    with open(auth_path, 'r', encoding='utf-8') as f:
+        auth = json.load(f)
+
+    # Base headers
+    headers = {
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7,zh;q=0.6,ms;q=0.5',
+        'Connection': 'keep-alive',
+        'Internal': '1',
+        'Referer': 'https://iepms.zte.com.cn/zte-crm-iepms-scheduleui/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36',
+        'X-Auth-Value': auth.get("x_auth_value", ""),
+        'X-Emp-No': auth.get("x_emp_no", ""),
+        'X-Lang-Id': 'en_US',
+        'X-Org-Id': '1',
+        'X-Origin-ServiceName': 'zte-crm-iepms-schedule',
+        'X-Target-ServiceName': 'zte-crm-iepms-schedule',
+        'X-Tenant-Id': '10001'
+    }
+
+    # Format cookies dictionary from the raw string
+    cookie_str = auth.get("cookie", "")
+    cookies = {}
+    for item in cookie_str.split(";"):
+        if "=" in item:
+            k, v = item.strip().split("=", 1)
+            cookies[k] = v
+
+    print("Fetching export records list from ZTE EPMS API...")
+    record_url = "https://iepms.zte.com.cn/zte-crm-iepms-basebff/zte-crm-iepms-schedule/record"
+    download_url = "https://iepms.zte.com.cn/zte-crm-iepms-basebff/zte-crm-iepms-schedule/record/download"
+    
+    success_count = 0
+    
+    for proj_name, proj_cfg in auth.get("projects", {}).items():
+        proj_id = proj_cfg.get("projId")
+        if not proj_id or "PASTE" in proj_id:
+            print(f"Skipping project {proj_name}: project ID (projId) is not configured.")
+            continue
+            
+        print(f"\nProcessing project: {proj_name} (ID: {proj_id})...")
+        
+        # Override project ID in request context headers and cookies
+        headers['X-Itp-Value'] = f'timeZone=8;projId={proj_id}'
+        cookies['projId'] = proj_id
+        
+        params = {
+            'operationType': 'EXPORT',
+            'pageNo': '1',
+            'pageSize': '20',
+            'bizType': 'SCHEDULE'
+        }
+        
+        try:
+            response = requests.get(record_url, headers=headers, cookies=cookies, params=params, timeout=30)
+            if response.status_code != 200:
+                print(f"  Error: Failed to fetch record list (HTTP {response.status_code})")
+                continue
+                
+            data = response.json()
+            rows = data.get("bo", {}).get("rows", [])
+            
+            # Look for matching target files
+            for pat, target_name in proj_cfg.get("files", {}).items():
+                print(f"  Searching export record matching pattern '{pat}'...")
+                matched_row = None
+                for row in rows:
+                    file_name = row.get("fileName", "")
+                    status = row.get("status", "")
+                    if pat in file_name and status == "SUCCESS":
+                        matched_row = row
+                        break
+                        
+                if not matched_row:
+                    print(f"    -> Warning: No completed export record found for '{pat}'!")
+                    continue
+                    
+                file_id = matched_row.get("fileId")
+                real_file_name = matched_row.get("fileName")
+                print(f"    -> Found completed export: {real_file_name} (ID: {file_id})")
+                
+                # Download
+                dl_params = {'docId': file_id, 'fileName': real_file_name}
+                out_path = os.path.join(input_dir, f"{target_name}.xlsx")
+                
+                print(f"    -> Downloading: {target_name}.xlsx...")
+                with requests.get(download_url, headers=headers, cookies=cookies, params=dl_params, stream=True, timeout=60) as r:
+                    r.raise_for_status()
+                    with open(out_path, 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                print(f"    -> SUCCESS: Saved to {out_path}")
+                success_count += 1
+                
+        except Exception as e:
+            print(f"  Error querying or downloading files for project {proj_name}: {e}")
+            
+    return success_count > 0
+
 def main():
     # Resolve project root dynamically (parent of scripts/)
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -277,6 +422,7 @@ def main():
     parser.add_argument("--force-detect", action="store_true", help="Force auto-detection and overwrite config file")
     parser.add_argument("--force-convert", action="store_true", help="Force conversion of all .xlsx files to .csv")
     parser.add_argument("--no-convert", action="store_true", help="Disable automatic .xlsx to .csv conversion check")
+    parser.add_argument("--fetch", action="store_true", help="Fetch the latest Excel sheets from the API before analyzing")
     
     args = parser.parse_args()
     
@@ -296,6 +442,12 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(docs_dir, exist_ok=True)
     
+    # 0. Fetch Excel files from API if requested
+    if args.fetch:
+        success = fetch_files_from_api(script_dir, input_dir)
+        if not success:
+            print("Warning: API fetch failed or was incomplete. Continuing with existing files.")
+    
     # 1. Run Excel to CSV check
     if not args.no_convert:
         check_and_convert_all_xlsx(input_dir, force_convert=args.force_convert)
@@ -313,7 +465,7 @@ def main():
             
     if not mappings:
         # Check files in input directory
-        csv_files = [f for f in os.listdir(input_dir) if f.endswith('.csv')]
+        csv_files = [f for f in os.listdir(input_dir) if f.endswith('.csv') and "test" not in f]
         
         # Populate mapping: first use verified mappings, fallback to auto-detect for unknown files
         for f in csv_files:
@@ -339,13 +491,12 @@ def main():
     combined_stats = {ms: {m: 0 for m in range(1, 13)} for ms in milestones}
     mappings_metadata = {}
     
-    csv_files = [f for f in os.listdir(input_dir) if f.endswith('.csv') and f in mappings]
+    csv_files = [f for f in os.listdir(input_dir) if f.endswith('.csv') and f in mappings and "test" not in f]
     
     for f in csv_files:
         path = os.path.join(input_dir, f)
         # Extract friendly name
-        friendly_name = f.split('-')[2] if len(f.split('-')) > 2 else f
-        friendly_name = friendly_name.replace('_', ' ').replace('.csv', '')
+        friendly_name = f.replace('_', ' ').replace('.csv', '')
         
         file_stats[friendly_name] = {ms: {m: 0 for m in range(1, 13)} for ms in milestones}
         mappings_metadata[friendly_name] = {}
