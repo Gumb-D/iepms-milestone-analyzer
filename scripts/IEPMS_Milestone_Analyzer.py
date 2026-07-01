@@ -317,7 +317,7 @@ def fetch_files_from_api(script_dir, input_dir):
         # Create a template configuration file
         template = {
             "cookie": "RedirectedToNewiCenter=1; ZTEDPGSSOCookie=YOUR_SSO_TOKEN; ZTEDPGSSOUser=YOUR_EMP_NO; ...",
-            "x_auth_value": "YOUR_AUTH_VALUE_FROM_F12_HEADERS",
+            "x_auth_value": "",
             "x_emp_no": "YOUR_EMP_NO",
             "projects": {
                 "Malaysia_CelcomDigi_Project": {
@@ -340,6 +340,20 @@ def fetch_files_from_api(script_dir, input_dir):
     with open(auth_path, 'r', encoding='utf-8') as f:
         auth = json.load(f)
 
+    # Format cookies dictionary from raw string
+    cookie_str = auth.get("cookie", "")
+    base_cookies = {}
+    for item in cookie_str.split(";"):
+        if "=" in item:
+            k, v = item.strip().split("=", 1)
+            base_cookies[k] = v
+
+    # Extract X-Auth-Value from Cookie string automatically if not defined
+    x_auth = auth.get("x_auth_value", "")
+    if not x_auth or "YOUR_AUTH_VALUE" in x_auth:
+        # Fallback to ZTEDPGSSOCookie or UCSSSOToken from cookies
+        x_auth = base_cookies.get("ZTEDPGSSOCookie", base_cookies.get("UCSSSOToken", ""))
+
     # Base headers
     base_headers = {
         'Accept': 'application/json, text/plain, */*',
@@ -349,7 +363,7 @@ def fetch_files_from_api(script_dir, input_dir):
         'Internal': '1',
         'Referer': 'https://iepms.zte.com.cn/zte-crm-iepms-scheduleui/',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36',
-        'X-Auth-Value': auth.get("x_auth_value", ""),
+        'X-Auth-Value': x_auth,
         'X-Emp-No': auth.get("x_emp_no", ""),
         'X-Lang-Id': 'en_US',
         'X-Org-Id': '1',
@@ -357,14 +371,6 @@ def fetch_files_from_api(script_dir, input_dir):
         'X-Target-ServiceName': 'zte-crm-iepms-schedule',
         'X-Tenant-Id': '10001'
     }
-
-    # Format cookies dictionary from raw string
-    cookie_str = auth.get("cookie", "")
-    base_cookies = {}
-    for item in cookie_str.split(";"):
-        if "=" in item:
-            k, v = item.strip().split("=", 1)
-            base_cookies[k] = v
 
     export_url = "https://iepms.zte.com.cn/zte-crm-iepms-basebff/zte-crm-iepms-schedule/schedule/export"
     record_url = "https://iepms.zte.com.cn/zte-crm-iepms-basebff/zte-crm-iepms-schedule/record"
