@@ -578,7 +578,8 @@ def execute_api_fetch_workflow(script_dir, input_dir):
                 if rec_resp.status_code != 200:
                     continue
                     
-                rows = rec_resp.json().get("bo", {}).get("rows", [])
+                bo_data = rec_resp.json().get("bo")
+                rows = bo_data.get("rows", []) if bo_data else []
                 
                 for clean_name in list(proj_data["files"]):
                     info = pending_files[clean_name]
@@ -586,7 +587,7 @@ def execute_api_fetch_workflow(script_dir, input_dir):
                     
                     matched_row = None
                     for row in rows:
-                        file_name = row.get("fileName", "")
+                        file_name = row.get("fileName") or ""
                         if pat in file_name:
                             matched_row = row
                             break
