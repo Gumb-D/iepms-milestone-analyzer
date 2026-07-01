@@ -1,0 +1,20 @@
+# Ignore input data containing cell/node data
+input/
+
+# Ignore generated reports
+output/
+
+# Ignore local configuration files
+scripts/milestone_config.json
+
+# System files
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+ENV/
+env/
