@@ -928,16 +928,23 @@ def main():
             total = sum(m_counts)
             f.write(f"| **{ms}** | " + " | ".join(map(str, m_counts)) + f" | **{total}** |\n")
             
-        f.write("\n## 2. Progress Breakdown by Project\n\n")
-        for name in file_stats:
-            f.write(f"### {name}\n\n")
-            f.write("| Milestone | Jan | Feb | Mar | Apr | May | Jun | Jul | Aug | Sep | Oct | Nov | Dec | **Total** |\n")
-            f.write("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n")
-            for ms in milestones:
-                m_counts = [file_stats[name][ms][m] for m in range(1, 13)]
-                total = sum(m_counts)
-                f.write(f"| **{ms}** | " + " | ".join(map(str, m_counts)) + f" | **{total}** |\n")
-            f.write("\n")
+        f.write("\n## 2. Progress Breakdown by Project & DU Model\n\n")
+        projects_grouped = {
+            "Malaysia CelcomDigi Project": ["2023 TX Rollout", "2024 Celcomdigi BAU", "Jendela TX Migration", "TX Mini Project"],
+            "CelcomDigi MW": ["MW EOS Swap", "ZTE TX MINI"]
+        }
+        for proj, models in projects_grouped.items():
+            f.write(f"### Project: {proj}\n\n")
+            for model_name in models:
+                if model_name in file_stats:
+                    f.write(f"#### DU Model: {model_name}\n\n")
+                    f.write("| Milestone | Jan | Feb | Mar | Apr | May | Jun | Jul | Aug | Sep | Oct | Nov | Dec | **Total** |\n")
+                    f.write("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n")
+                    for ms in milestones:
+                        m_counts = [file_stats[model_name][ms][m] for m in range(1, 13)]
+                        total = sum(m_counts)
+                        f.write(f"| **{ms}** | " + " | ".join(map(str, m_counts)) + f" | **{total}** |\n")
+                    f.write("\n")
 
         f.write("\n## 3. SLA & KPI Performance\n\n")
         f.write("This section tracks the cycle-time durations and SLA compliance for active, open-ended backlogs (sites where the starting milestone has occurred but the target milestone is not yet completed, calculated from start date until today):\n")
@@ -954,14 +961,17 @@ def main():
         f.write(format_sla_row("TI ➔ L1", combined_sla_stats["TI_L1"]) + "\n")
         f.write(format_sla_row("MC ➔ PAC", combined_sla_stats["MC_PAC"]) + "\n\n")
         
-        f.write("### SLA Performance Breakdown by Project\n\n")
-        for name in file_sla_stats:
-            f.write(f"#### {name}\n\n")
-            f.write("| KPI Milestone | Open Backlog | Within SLA | Warning | Critical (Breached) | Compliance % | Avg Days Open |\n")
-            f.write("| :--- | :---: | :---: | :---: | :---: | :---: | :---: |\n")
-            f.write(format_sla_row("MC ➔ MOS", file_sla_stats[name]["MC_MOS"]) + "\n")
-            f.write(format_sla_row("TI ➔ L1", file_sla_stats[name]["TI_L1"]) + "\n")
-            f.write(format_sla_row("MC ➔ PAC", file_sla_stats[name]["MC_PAC"]) + "\n\n")
+        f.write("### SLA Performance Breakdown by Project & DU Model\n\n")
+        for proj, models in projects_grouped.items():
+            f.write(f"#### Project: {proj}\n\n")
+            for model_name in models:
+                if model_name in file_sla_stats:
+                    f.write(f"##### DU Model: {model_name}\n\n")
+                    f.write("| KPI Milestone | Open Backlog | Within SLA | Warning | Critical (Breached) | Compliance % | Avg Days Open |\n")
+                    f.write("| :--- | :---: | :---: | :---: | :---: | :---: | :---: |\n")
+                    f.write(format_sla_row("MC ➔ MOS", file_sla_stats[model_name]["MC_MOS"]) + "\n")
+                    f.write(format_sla_row("TI ➔ L1", file_sla_stats[model_name]["TI_L1"]) + "\n")
+                    f.write(format_sla_row("MC ➔ PAC", file_sla_stats[model_name]["MC_PAC"]) + "\n\n")
 
     print("\n========================================================")
     print("ANALYSIS COMPLETE!")
