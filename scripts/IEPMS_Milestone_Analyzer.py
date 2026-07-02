@@ -451,7 +451,7 @@ def format_backlog_year_table(stats_map):
     
     return "\n".join(lines)
 
-def format_backlog_du_table(file_sla_stats, combined_sla_stats, target_year):
+def format_single_sla_du_table(kpi_key, file_sla_stats, combined_sla_stats, target_year):
     du_order = [
         "2023 TX Rollout",
         "2024 Celcomdigi BAU",
@@ -462,39 +462,54 @@ def format_backlog_du_table(file_sla_stats, combined_sla_stats, target_year):
     ]
     
     lines = []
-    lines.append(f"| Project DU Model | MC ➔ MOS (Count) | Avg Days | TI ➔ L1 (Count) | Avg Days | MC ➔ PAC (Count) | Avg Days |")
+    lines.append("| DU Model | Open Backlog | Within SLA | Warning | Critical (Breached) | Compliance % | Avg Days Open |")
     lines.append("| :--- | :---: | :---: | :---: | :---: | :---: | :---: |")
     
     for du in du_order:
         row_cols = [du]
         if du in file_sla_stats:
-            stats_map = file_sla_stats[du]
-            for kpi in ["MC_MOS", "TI_L1", "MC_PAC"]:
-                kpi_y = stats_map[kpi]["by_year"].get(target_year)
-                if kpi_y and kpi_y["count"] > 0:
-                    count = kpi_y["count"]
-                    avg_days = kpi_y["total_days"] / count
-                    row_cols.append(f"{count}")
-                    row_cols.append(f"{avg_days:.1f}")
-                else:
-                    row_cols.append("0")
-                    row_cols.append("N/A")
+            stats = file_sla_stats[du][kpi_key]
+            kpi_y = stats["by_year"].get(target_year)
+            if kpi_y and kpi_y["count"] > 0:
+                count = kpi_y["count"]
+                met = kpi_y["met"]
+                warn = kpi_y["warn"]
+                breached = kpi_y["breached"]
+                compliance = ((met + warn) / count) * 100
+                avg_days = kpi_y["total_days"] / count
+                
+                row_cols.append(f"{count}")
+                row_cols.append(f"{met}")
+                row_cols.append(f"{warn}")
+                row_cols.append(f"{breached}")
+                row_cols.append(f"**{compliance:.1f}%**")
+                row_cols.append(f"{avg_days:.1f}")
+            else:
+                row_cols.extend(["0", "0", "0", "0", "N/A", "N/A"])
         else:
-            row_cols.extend(["0", "N/A", "0", "N/A", "0", "N/A"])
+            row_cols.extend(["0", "0", "0", "0", "N/A", "N/A"])
         lines.append("| " + " | ".join(row_cols) + " |")
         
     # Append Total row for the target year
     row_cols = ["**Total**"]
-    for kpi in ["MC_MOS", "TI_L1", "MC_PAC"]:
-        kpi_y = combined_sla_stats[kpi]["by_year"].get(target_year)
-        if kpi_y and kpi_y["count"] > 0:
-            count = kpi_y["count"]
-            avg_days = kpi_y["total_days"] / count
-            row_cols.append(f"**{count}**")
-            row_cols.append(f"**{avg_days:.1f}**")
-        else:
-            row_cols.append("**0**")
-            row_cols.append("**N/A**")
+    combined_stats = combined_sla_stats[kpi_key]
+    kpi_y = combined_stats["by_year"].get(target_year)
+    if kpi_y and kpi_y["count"] > 0:
+        count = kpi_y["count"]
+        met = kpi_y["met"]
+        warn = kpi_y["warn"]
+        breached = kpi_y["breached"]
+        compliance = ((met + warn) / count) * 100
+        avg_days = kpi_y["total_days"] / count
+        
+        row_cols.append(f"**{count}**")
+        row_cols.append(f"**{met}**")
+        row_cols.append(f"**{warn}**")
+        row_cols.append(f"**{breached}**")
+        row_cols.append(f"**{compliance:.1f}%**")
+        row_cols.append(f"**{avg_days:.1f}**")
+    else:
+        row_cols.extend(["**0**", "**0**", "**0**", "**0**", "**N/A**", "**N/A**"])
     lines.append("| " + " | ".join(row_cols) + " |")
     
     return "\n".join(lines)
@@ -1056,32 +1071,16 @@ def main():
         f.write("* **TI ➔ L1**: Telecom Installation to Q&EHS L1 Approved (Target: < 14 days, Warning: 10-13 days)\n")
         f.write("* **MC ➔ PAC**: Material Collection to Preliminary Acceptance Certification (Target: < 30 days, Warning: 25-29 days)\n\n")
         f.write("> [!NOTE]\n")
-        f.write("> Compliance % is calculated as `(Within SLA + Warning) / Open Backlog * 100` representing completed tasks within their respective SLA limits (14 days for MC->MOS & TI->L1, 30 days for MC->PAC).\n\n")
+        f.write("> Compliance % is calculated as `(Within SLA + Warning) / Open Backlog * 100` representing tasks completed within their respective SLA limits.\n\n")
         
-        f.write("### Combined SLA Performance (All Projects)\n\n")
-        f.write("| KPI Milestone | Open Backlog | Within SLA | Warning | Critical (Breached) | Compliance % | Avg Days Open |\n")
-        f.write("| :--- | :---: | :---: | :---: | :---: | :---: | :---: |\n")
-        f.write(format_sla_row("MC ➔ MOS", combined_sla_stats["MC_MOS"]) + "\n")
-        f.write(format_sla_row("TI ➔ L1", combined_sla_stats["TI_L1"]) + "\n")
-        f.write(format_sla_row("MC ➔ PAC", combined_sla_stats["MC_PAC"]) + "\n\n")
+        f.write(f"### 3.1 MC ➔ MOS SLA Backlog (Year {target_year} Only)\n\n")
+        f.write(format_single_sla_du_table("MC_MOS", file_sla_stats, combined_sla_stats, target_year) + "\n\n")
         
-        f.write(f"#### Active Backlog Breakdown by Project DU Model (Year {target_year} Only)\n\n")
-        f.write(format_backlog_du_table(file_sla_stats, combined_sla_stats, target_year) + "\n\n")
+        f.write(f"### 3.2 TI ➔ L1 SLA Backlog (Year {target_year} Only)\n\n")
+        f.write(format_single_sla_du_table("TI_L1", file_sla_stats, combined_sla_stats, target_year) + "\n\n")
         
-        f.write("### SLA Performance Breakdown by Project & DU Model\n\n")
-        for proj, models in projects_grouped.items():
-            f.write(f"#### Project: {proj}\n\n")
-            for model_name in models:
-                if model_name in file_sla_stats:
-                    f.write(f"##### DU Model: {model_name}\n\n")
-                    f.write("| KPI Milestone | Open Backlog | Within SLA | Warning | Critical (Breached) | Compliance % | Avg Days Open |\n")
-                    f.write("| :--- | :---: | :---: | :---: | :---: | :---: | :---: |\n")
-                    f.write(format_sla_row("MC ➔ MOS", file_sla_stats[model_name]["MC_MOS"]) + "\n")
-                    f.write(format_sla_row("TI ➔ L1", file_sla_stats[model_name]["TI_L1"]) + "\n")
-                    f.write(format_sla_row("MC ➔ PAC", file_sla_stats[model_name]["MC_PAC"]) + "\n\n")
-                    
-                    f.write("###### Backlog Breakdown by Year\n\n")
-                    f.write(format_backlog_year_table(file_sla_stats[model_name]) + "\n\n")
+        f.write(f"### 3.3 MC ➔ PAC SLA Backlog (Year {target_year} Only)\n\n")
+        f.write(format_single_sla_du_table("MC_PAC", file_sla_stats, combined_sla_stats, target_year) + "\n\n")
 
     print("\n========================================================")
     print("ANALYSIS COMPLETE!")
