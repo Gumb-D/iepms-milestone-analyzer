@@ -56,6 +56,6 @@ Present the results in a clean, professional response:
   * Print the **Progress Breakdown by Project & DU Model** tables verbatim for **EACH project** (so the user knows the project-level origin of the progress).
 * **SLA Performance & Backlog Year Breakdowns (Verbatim)**:
   * Print the **Combined SLA Performance (All Projects)** table verbatim.
-  * Print the **Combined Backlog Breakdown by Year (All Projects)** table verbatim.
+  * Print the **Active Backlog Breakdown by Project DU Model (Year <target_year> Only)** table verbatim.
   * Print the **SLA Performance Breakdown by Project & DU Model** tables (including their respective **Backlog Breakdown by Year** tables) verbatim for **EACH project/DU model**.
 * Summarize key observations and project-level performance highlights.

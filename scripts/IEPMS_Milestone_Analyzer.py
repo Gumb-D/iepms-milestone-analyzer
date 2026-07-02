@@ -451,6 +451,54 @@ def format_backlog_year_table(stats_map):
     
     return "\n".join(lines)
 
+def format_backlog_du_table(file_sla_stats, combined_sla_stats, target_year):
+    du_order = [
+        "2023 TX Rollout",
+        "2024 Celcomdigi BAU",
+        "Jendela TX Migration",
+        "TX Mini Project",
+        "MW EOS Swap",
+        "ZTE TX MINI"
+    ]
+    
+    lines = []
+    lines.append(f"| Project DU Model | MC ➔ MOS (Count) | Avg Days | TI ➔ L1 (Count) | Avg Days | MC ➔ PAC (Count) | Avg Days |")
+    lines.append("| :--- | :---: | :---: | :---: | :---: | :---: | :---: |")
+    
+    for du in du_order:
+        row_cols = [du]
+        if du in file_sla_stats:
+            stats_map = file_sla_stats[du]
+            for kpi in ["MC_MOS", "TI_L1", "MC_PAC"]:
+                kpi_y = stats_map[kpi]["by_year"].get(target_year)
+                if kpi_y and kpi_y["count"] > 0:
+                    count = kpi_y["count"]
+                    avg_days = kpi_y["total_days"] / count
+                    row_cols.append(f"{count}")
+                    row_cols.append(f"{avg_days:.1f}")
+                else:
+                    row_cols.append("0")
+                    row_cols.append("N/A")
+        else:
+            row_cols.extend(["0", "N/A", "0", "N/A", "0", "N/A"])
+        lines.append("| " + " | ".join(row_cols) + " |")
+        
+    # Append Total row for the target year
+    row_cols = ["**Total**"]
+    for kpi in ["MC_MOS", "TI_L1", "MC_PAC"]:
+        kpi_y = combined_sla_stats[kpi]["by_year"].get(target_year)
+        if kpi_y and kpi_y["count"] > 0:
+            count = kpi_y["count"]
+            avg_days = kpi_y["total_days"] / count
+            row_cols.append(f"**{count}**")
+            row_cols.append(f"**{avg_days:.1f}**")
+        else:
+            row_cols.append("**0**")
+            row_cols.append("**N/A**")
+    lines.append("| " + " | ".join(row_cols) + " |")
+    
+    return "\n".join(lines)
+
 def execute_api_fetch_workflow(script_dir, input_dir):
     script_start_time = datetime.datetime.now()
     auth_path = os.path.join(script_dir, "api_auth.json")
@@ -1017,8 +1065,8 @@ def main():
         f.write(format_sla_row("TI ➔ L1", combined_sla_stats["TI_L1"]) + "\n")
         f.write(format_sla_row("MC ➔ PAC", combined_sla_stats["MC_PAC"]) + "\n\n")
         
-        f.write("#### Combined Backlog Breakdown by Year (All Projects)\n\n")
-        f.write(format_backlog_year_table(combined_sla_stats) + "\n\n")
+        f.write(f"#### Active Backlog Breakdown by Project DU Model (Year {target_year} Only)\n\n")
+        f.write(format_backlog_du_table(file_sla_stats, combined_sla_stats, target_year) + "\n\n")
         
         f.write("### SLA Performance Breakdown by Project & DU Model\n\n")
         for proj, models in projects_grouped.items():
