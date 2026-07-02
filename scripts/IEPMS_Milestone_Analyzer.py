@@ -896,10 +896,10 @@ def main():
                             combined_sla_stats["MC_PAC"]["total_days"] += dur
                             combined_sla_stats["MC_PAC"]["count"] += 1
                             
-                            if dur < 10:
+                            if dur < 25:
                                 file_sla_stats[friendly_name]["MC_PAC"]["met"] += 1
                                 combined_sla_stats["MC_PAC"]["met"] += 1
-                            elif dur <= 13:
+                            elif dur <= 29:
                                 file_sla_stats[friendly_name]["MC_PAC"]["warn"] += 1
                                 combined_sla_stats["MC_PAC"]["warn"] += 1
                             else:
@@ -956,12 +956,12 @@ def main():
         f.write("This section tracks the cycle-time durations and SLA compliance for three key execution milestones:\n")
         f.write("* **MC ➔ MOS**: Material Collection to Material On Site (Target: < 14 days, Warning: 10-13 days)\n")
         f.write("* **TI ➔ L1**: Telecom Installation to Q&EHS L1 Approved (Target: < 14 days, Warning: 10-13 days)\n")
-        f.write("* **MC ➔ PAC**: Material Collection to Preliminary Acceptance Certification (Target: < 14 days, Warning: 10-13 days)\n\n")
+        f.write("* **MC ➔ PAC**: Material Collection to Preliminary Acceptance Certification (Target: < 30 days, Warning: 25-29 days)\n\n")
         f.write("> [!NOTE]\n")
-        f.write("> Compliance % is calculated as `(Met + Warning) / (Met + Warning + Breached) * 100` representing completed tasks within the 14-day SLA limit.\n\n")
+        f.write("> Compliance % is calculated as `(Met + Warning) / (Met + Warning + Breached) * 100` representing completed tasks within their respective SLA limits (14 days for MC->MOS & TI->L1, 30 days for MC->PAC).\n\n")
         
         f.write("### Combined SLA Performance (All Projects)\n\n")
-        f.write("| KPI Milestone | Monitored | Met (<10d) | Warning (10-13d) | Breached (≥14d) | Pending | Compliance % | Avg Days |\n")
+        f.write("| KPI Milestone | Monitored | Met | Warning | Breached | Pending | Compliance % | Avg Days |\n")
         f.write("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n")
         f.write(format_sla_row("MC ➔ MOS", combined_sla_stats["MC_MOS"]) + "\n")
         f.write(format_sla_row("TI ➔ L1", combined_sla_stats["TI_L1"]) + "\n")
@@ -970,7 +970,7 @@ def main():
         f.write("### SLA Performance Breakdown by Project\n\n")
         for name in file_sla_stats:
             f.write(f"#### {name}\n\n")
-            f.write("| KPI Milestone | Monitored | Met (<10d) | Warning (10-13d) | Breached (≥14d) | Pending | Compliance % | Avg Days |\n")
+            f.write("| KPI Milestone | Monitored | Met | Warning | Breached | Pending | Compliance % | Avg Days |\n")
             f.write("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n")
             f.write(format_sla_row("MC ➔ MOS", file_sla_stats[name]["MC_MOS"]) + "\n")
             f.write(format_sla_row("TI ➔ L1", file_sla_stats[name]["TI_L1"]) + "\n")
