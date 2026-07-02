@@ -410,6 +410,47 @@ def format_sla_row(kpi_name, stats):
         
     return f"| {kpi_name} | {total_open} | {met} | {warn} | {breached} | {compliance_str} | {avg_days_str} |"
 
+def format_backlog_year_table(stats_map):
+    # Collect all unique years across all three KPIs
+    all_years = set()
+    for kpi in ["MC_MOS", "TI_L1", "MC_PAC"]:
+        all_years.update(stats_map[kpi]["by_year"].keys())
+    
+    sorted_years = sorted(list(all_years))
+    
+    lines = []
+    lines.append("| Backlog Year | MC ➔ MOS (Count) | Avg Days | TI ➔ L1 (Count) | Avg Days | MC ➔ PAC (Count) | Avg Days |")
+    lines.append("| :--- | :---: | :---: | :---: | :---: | :---: | :---: |")
+    
+    for y in sorted_years:
+        row_cols = [f"**Year {y}**"]
+        for kpi in ["MC_MOS", "TI_L1", "MC_PAC"]:
+            kpi_y = stats_map[kpi]["by_year"].get(y)
+            if kpi_y and kpi_y["count"] > 0:
+                count = kpi_y["count"]
+                avg_days = kpi_y["total_days"] / count
+                row_cols.append(f"{count}")
+                row_cols.append(f"{avg_days:.1f}")
+            else:
+                row_cols.append("0")
+                row_cols.append("N/A")
+        lines.append("| " + " | ".join(row_cols) + " |")
+        
+    # Append Total row
+    row_cols = ["**Total**"]
+    for kpi in ["MC_MOS", "TI_L1", "MC_PAC"]:
+        count = stats_map[kpi]["count"]
+        if count > 0:
+            avg_days = stats_map[kpi]["total_days"] / count
+            row_cols.append(f"**{count}**")
+            row_cols.append(f"**{avg_days:.1f}**")
+        else:
+            row_cols.append("**0**")
+            row_cols.append("**N/A**")
+    lines.append("| " + " | ".join(row_cols) + " |")
+    
+    return "\n".join(lines)
+
 def execute_api_fetch_workflow(script_dir, input_dir):
     script_start_time = datetime.datetime.now()
     auth_path = os.path.join(script_dir, "api_auth.json")
@@ -770,9 +811,9 @@ def main():
     
     file_sla_stats = {}
     combined_sla_stats = {
-        "MC_MOS": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0},
-        "TI_L1": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0},
-        "MC_PAC": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0}
+        "MC_MOS": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0, "by_year": {}},
+        "TI_L1": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0, "by_year": {}},
+        "MC_PAC": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0, "by_year": {}}
     }
     
     csv_files = [f for f in os.listdir(input_dir) if f.endswith('.csv') and f in mappings and "test" not in f]
@@ -786,9 +827,9 @@ def main():
         mappings_metadata[friendly_name] = {}
         
         file_sla_stats[friendly_name] = {
-            "MC_MOS": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0},
-            "TI_L1": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0},
-            "MC_PAC": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0}
+            "MC_MOS": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0, "by_year": {}},
+            "TI_L1": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0, "by_year": {}},
+            "MC_PAC": {"met": 0, "warn": 0, "breached": 0, "pending": 0, "total_days": 0, "count": 0, "by_year": {}}
         }
         
         try:
@@ -837,64 +878,79 @@ def main():
                     pac_date = parse_date_only(row[pac_col]) if pac_col is not None and pac_col < len(row) else None
                     
                     # MC -> MOS
-                    if mc_date and not mos_date and mc_date.year == target_year:
+                    if mc_date and not mos_date:
                         dur = (today - mc_date).days
                         if dur < 0:
                             dur = 0
-                        file_sla_stats[friendly_name]["MC_MOS"]["total_days"] += dur
-                        file_sla_stats[friendly_name]["MC_MOS"]["count"] += 1
-                        combined_sla_stats["MC_MOS"]["total_days"] += dur
-                        combined_sla_stats["MC_MOS"]["count"] += 1
+                        y = mc_date.year
                         
-                        if dur < 10:
-                            file_sla_stats[friendly_name]["MC_MOS"]["met"] += 1
-                            combined_sla_stats["MC_MOS"]["met"] += 1
-                        elif dur <= 13:
-                            file_sla_stats[friendly_name]["MC_MOS"]["warn"] += 1
-                            combined_sla_stats["MC_MOS"]["warn"] += 1
-                        else:
-                            file_sla_stats[friendly_name]["MC_MOS"]["breached"] += 1
-                            combined_sla_stats["MC_MOS"]["breached"] += 1
+                        for d in [file_sla_stats[friendly_name]["MC_MOS"], combined_sla_stats["MC_MOS"]]:
+                            d["total_days"] += dur
+                            d["count"] += 1
+                            if y not in d["by_year"]:
+                                d["by_year"][y] = {"count": 0, "total_days": 0, "met": 0, "warn": 0, "breached": 0}
+                            d["by_year"][y]["count"] += 1
+                            d["by_year"][y]["total_days"] += dur
                             
+                            if dur < 10:
+                                d["met"] += 1
+                                d["by_year"][y]["met"] += 1
+                            elif dur <= 13:
+                                d["warn"] += 1
+                                d["by_year"][y]["warn"] += 1
+                            else:
+                                d["breached"] += 1
+                                d["by_year"][y]["breached"] += 1
+                                
                     # TI -> L1
-                    if ti_date and not l1_date and ti_date.year == target_year:
+                    if ti_date and not l1_date:
                         dur = (today - ti_date).days
                         if dur < 0:
                             dur = 0
-                        file_sla_stats[friendly_name]["TI_L1"]["total_days"] += dur
-                        file_sla_stats[friendly_name]["TI_L1"]["count"] += 1
-                        combined_sla_stats["TI_L1"]["total_days"] += dur
-                        combined_sla_stats["TI_L1"]["count"] += 1
+                        y = ti_date.year
                         
-                        if dur < 10:
-                            file_sla_stats[friendly_name]["TI_L1"]["met"] += 1
-                            combined_sla_stats["TI_L1"]["met"] += 1
-                        elif dur <= 13:
-                            file_sla_stats[friendly_name]["TI_L1"]["warn"] += 1
-                            combined_sla_stats["TI_L1"]["warn"] += 1
-                        else:
-                            file_sla_stats[friendly_name]["TI_L1"]["breached"] += 1
-                            combined_sla_stats["TI_L1"]["breached"] += 1
+                        for d in [file_sla_stats[friendly_name]["TI_L1"], combined_sla_stats["TI_L1"]]:
+                            d["total_days"] += dur
+                            d["count"] += 1
+                            if y not in d["by_year"]:
+                                d["by_year"][y] = {"count": 0, "total_days": 0, "met": 0, "warn": 0, "breached": 0}
+                            d["by_year"][y]["count"] += 1
+                            d["by_year"][y]["total_days"] += dur
                             
+                            if dur < 10:
+                                d["met"] += 1
+                                d["by_year"][y]["met"] += 1
+                            elif dur <= 13:
+                                d["warn"] += 1
+                                d["by_year"][y]["warn"] += 1
+                            else:
+                                d["breached"] += 1
+                                d["by_year"][y]["breached"] += 1
+                                
                     # MC -> PAC
-                    if mc_date and not pac_date and mc_date.year == target_year:
+                    if mc_date and not pac_date:
                         dur = (today - mc_date).days
                         if dur < 0:
                             dur = 0
-                        file_sla_stats[friendly_name]["MC_PAC"]["total_days"] += dur
-                        file_sla_stats[friendly_name]["MC_PAC"]["count"] += 1
-                        combined_sla_stats["MC_PAC"]["total_days"] += dur
-                        combined_sla_stats["MC_PAC"]["count"] += 1
+                        y = mc_date.year
                         
-                        if dur < 25:
-                            file_sla_stats[friendly_name]["MC_PAC"]["met"] += 1
-                            combined_sla_stats["MC_PAC"]["met"] += 1
-                        elif dur <= 29:
-                            file_sla_stats[friendly_name]["MC_PAC"]["warn"] += 1
-                            combined_sla_stats["MC_PAC"]["warn"] += 1
-                        else:
-                            file_sla_stats[friendly_name]["MC_PAC"]["breached"] += 1
-                            combined_sla_stats["MC_PAC"]["breached"] += 1
+                        for d in [file_sla_stats[friendly_name]["MC_PAC"], combined_sla_stats["MC_PAC"]]:
+                            d["total_days"] += dur
+                            d["count"] += 1
+                            if y not in d["by_year"]:
+                                d["by_year"][y] = {"count": 0, "total_days": 0, "met": 0, "warn": 0, "breached": 0}
+                            d["by_year"][y]["count"] += 1
+                            d["by_year"][y]["total_days"] += dur
+                            
+                            if dur < 25:
+                                d["met"] += 1
+                                d["by_year"][y]["met"] += 1
+                            elif dur <= 29:
+                                d["warn"] += 1
+                                d["by_year"][y]["warn"] += 1
+                            else:
+                                d["breached"] += 1
+                                d["by_year"][y]["breached"] += 1
                                 
         except Exception as e:
             print(f"Error processing file {f}: {e}")
@@ -961,6 +1017,9 @@ def main():
         f.write(format_sla_row("TI ➔ L1", combined_sla_stats["TI_L1"]) + "\n")
         f.write(format_sla_row("MC ➔ PAC", combined_sla_stats["MC_PAC"]) + "\n\n")
         
+        f.write("#### Combined Backlog Breakdown by Year (All Projects)\n\n")
+        f.write(format_backlog_year_table(combined_sla_stats) + "\n\n")
+        
         f.write("### SLA Performance Breakdown by Project & DU Model\n\n")
         for proj, models in projects_grouped.items():
             f.write(f"#### Project: {proj}\n\n")
@@ -972,6 +1031,9 @@ def main():
                     f.write(format_sla_row("MC ➔ MOS", file_sla_stats[model_name]["MC_MOS"]) + "\n")
                     f.write(format_sla_row("TI ➔ L1", file_sla_stats[model_name]["TI_L1"]) + "\n")
                     f.write(format_sla_row("MC ➔ PAC", file_sla_stats[model_name]["MC_PAC"]) + "\n\n")
+                    
+                    f.write("###### Backlog Breakdown by Year\n\n")
+                    f.write(format_backlog_year_table(file_sla_stats[model_name]) + "\n\n")
 
     print("\n========================================================")
     print("ANALYSIS COMPLETE!")
