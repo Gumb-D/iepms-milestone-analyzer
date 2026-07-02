@@ -66,4 +66,8 @@ Present the results in a clean, professional response:
   * Print the **3.1 MC ➔ MOS SLA Backlog (Year <target_year> Only)** table verbatim.
   * Print the **3.2 TI ➔ L1 SLA Backlog (Year <target_year> Only)** table verbatim.
   * Print the **3.3 MC ➔ PAC SLA Backlog (Year <target_year> Only)** table verbatim.
+* **Detailed Backlog Site Lists (Verbatim Tables)**:
+  * If the user asks for the detailed site lists for critical/warning/all backlog stages under any DU Model and KPI, you **MUST** run:
+    `python scripts/IEPMS_Milestone_Analyzer.py --list-critical --du "<du_model>" --kpi "<kpi_key>" --year <target_year> --stage <stage>`
+  * **Always copy and print the resulting markdown table verbatim in your response.** Do **NOT** format them as plain text lists, comma-separated values, or custom lists.
 * Summarize key observations and project-level performance highlights.
