@@ -806,6 +806,7 @@ def main():
     parser.add_argument("--list-critical", action="store_true", help="List the details of critical sites for a given DU and KPI")
     parser.add_argument("--du", help="DU model name (e.g. 'MW EOS Swap')")
     parser.add_argument("--kpi", choices=["MC_MOS", "TI_L1", "MC_PAC"], help="KPI key name")
+    parser.add_argument("--stage", choices=["critical", "warning", "all"], default="all", help="Stage filter for backlog details listing")
     
     args = parser.parse_args()
     
@@ -872,8 +873,8 @@ def main():
         today = datetime.date.today()
         # Check that we have a DU and KPI
         if not args.du or not args.kpi:
-            print("Error: Please specify both --du and --kpi to list critical sites.")
-            print("Usage: python scripts/IEPMS_Milestone_Analyzer.py --list-critical --du \"MW EOS Swap\" --kpi \"MC_MOS\" --year 2026")
+            print("Error: Please specify both --du and --kpi to list sites.")
+            print("Usage: python scripts/IEPMS_Milestone_Analyzer.py --list-critical --du \"MW EOS Swap\" --kpi \"MC_MOS\" --year 2026 --stage all")
             return
             
         # Standardize DU name to match our files
@@ -903,12 +904,12 @@ def main():
             
         mapping_info = mappings[filename]
         kpi_milestones = {
-            "MC_MOS": ("MC", "MOS", 14),
-            "TI_L1": ("TI", "L1", 14),
-            "MC_PAC": ("MC", "PAC", 30)
+            "MC_MOS": ("MC", "MOS", 14, 10),
+            "TI_L1": ("TI", "L1", 14, 10),
+            "MC_PAC": ("MC", "PAC", 30, 25)
         }
         
-        start_ms, target_ms, threshold = kpi_milestones[args.kpi]
+        start_ms, target_ms, threshold, warn_threshold = kpi_milestones[args.kpi]
         start_col = mapping_info.get(start_ms)
         target_col = mapping_info.get(target_ms)
         
@@ -916,7 +917,7 @@ def main():
             print(f"Error: Required milestone columns ({start_ms} or {target_ms}) are not mapped for '{filename}'")
             return
             
-        critical_sites = []
+        backlog_sites = []
         try:
             with open(path, 'r', encoding='utf-8') as file:
                 reader = csv.reader(file)
@@ -935,30 +936,50 @@ def main():
                         dur = (today - start_date).days
                         if dur < 0:
                             dur = 0
+                            
+                        # Determine status
+                        status = None
                         if dur >= threshold:
+                            status = "Critical (Breached)"
+                        elif dur >= warn_threshold:
+                            status = "Warning"
+                        else:
+                            status = "Within SLA"
+                            
+                        # Filter by stage
+                        match_stage = False
+                        if args.stage == "all" and status in ["Critical (Breached)", "Warning"]:
+                            match_stage = True
+                        elif args.stage == "critical" and status == "Critical (Breached)":
+                            match_stage = True
+                        elif args.stage == "warning" and status == "Warning":
+                            match_stage = True
+                            
+                        if match_stage:
                             site_code = row[0] if len(row) > 0 else f"Row {r_idx + 5}"
                             site_name = row[1] if len(row) > 1 else "Unknown"
-                            critical_sites.append({
+                            backlog_sites.append({
                                 "site_code": site_code,
                                 "site_name": site_name,
                                 "start_date": start_val,
-                                "age": dur
+                                "age": dur,
+                                "status": status
                             })
         except Exception as e:
             print(f"Error reading file '{filename}': {e}")
             return
             
         # Print results in markdown format for OpenClaw to print directly!
-        print(f"\n### Critical Backlog Sites for {du_clean} ({start_ms} ➔ {target_ms}, Year {target_year} Only)")
-        print(f"Total Critical (Breached SLA >= {threshold} days) Sites: {len(critical_sites)}\n")
-        if not critical_sites:
-            print("No critical sites found.")
+        print(f"\n### Backlog Sites for {du_clean} ({start_ms} ➔ {target_ms}, Year {target_year} Only, Stage: {args.stage})")
+        print(f"Total Sites Found: {len(backlog_sites)}\n")
+        if not backlog_sites:
+            print("No backlog sites found.")
             return
             
         print("| Site Code | Site Name | Start Date | Age (Days) | Status |")
         print("| :--- | :--- | :---: | :---: | :--- |")
-        for s in sorted(critical_sites, key=lambda x: x["age"], reverse=True):
-            print(f"| {s['site_code']} | {s['site_name']} | {s['start_date']} | {s['age']} | Critical (Breached) |")
+        for s in sorted(backlog_sites, key=lambda x: x["age"], reverse=True):
+            print(f"| {s['site_code']} | {s['site_name']} | {s['start_date']} | {s['age']} | {s['status']} |")
         print()
         return
 
