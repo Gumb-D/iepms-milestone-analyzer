@@ -837,7 +837,7 @@ def main():
                     pac_date = parse_date_only(row[pac_col]) if pac_col is not None and pac_col < len(row) else None
                     
                     # MC -> MOS
-                    if mc_date and not mos_date:
+                    if mc_date and not mos_date and mc_date.year == target_year:
                         dur = (today - mc_date).days
                         if dur < 0:
                             dur = 0
@@ -857,7 +857,7 @@ def main():
                             combined_sla_stats["MC_MOS"]["breached"] += 1
                             
                     # TI -> L1
-                    if ti_date and not l1_date:
+                    if ti_date and not l1_date and ti_date.year == target_year:
                         dur = (today - ti_date).days
                         if dur < 0:
                             dur = 0
@@ -877,7 +877,7 @@ def main():
                             combined_sla_stats["TI_L1"]["breached"] += 1
                             
                     # MC -> PAC
-                    if mc_date and not pac_date:
+                    if mc_date and not pac_date and mc_date.year == target_year:
                         dur = (today - mc_date).days
                         if dur < 0:
                             dur = 0
