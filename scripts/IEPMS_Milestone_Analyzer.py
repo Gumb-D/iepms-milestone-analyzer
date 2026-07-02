@@ -803,6 +803,9 @@ def main():
     parser.add_argument("--force-convert", action="store_true", help="Force conversion of all .xlsx files to .csv")
     parser.add_argument("--no-convert", action="store_true", help="Disable automatic .xlsx to .csv conversion check")
     parser.add_argument("--fetch", action="store_true", help="Fetch the latest Excel sheets from the API before analyzing")
+    parser.add_argument("--list-critical", action="store_true", help="List the details of critical sites for a given DU and KPI")
+    parser.add_argument("--du", help="DU model name (e.g. 'MW EOS Swap')")
+    parser.add_argument("--kpi", choices=["MC_MOS", "TI_L1", "MC_PAC"], help="KPI key name")
     
     args = parser.parse_args()
     
@@ -865,6 +868,100 @@ def main():
         except Exception as e:
             print(f"Warning: Could not save config file: {e}")
             
+    if args.list_critical:
+        today = datetime.date.today()
+        # Check that we have a DU and KPI
+        if not args.du or not args.kpi:
+            print("Error: Please specify both --du and --kpi to list critical sites.")
+            print("Usage: python scripts/IEPMS_Milestone_Analyzer.py --list-critical --du \"MW EOS Swap\" --kpi \"MC_MOS\" --year 2026")
+            return
+            
+        # Standardize DU name to match our files
+        du_clean = args.du.replace("DU Model:", "").strip()
+        filename = du_clean.replace(" ", "_") + ".csv"
+        
+        path = os.path.join(input_dir, filename)
+        if not os.path.exists(path):
+            # Try finding the CSV file case-insensitively or containing substring
+            all_csvs = [f for f in os.listdir(input_dir) if f.endswith('.csv') and "test" not in f]
+            matched_file = None
+            for c in all_csvs:
+                if du_clean.lower().replace(" ", "") in c.lower().replace("_", ""):
+                    matched_file = c
+                    break
+            if matched_file:
+                path = os.path.join(input_dir, matched_file)
+                filename = matched_file
+            else:
+                print(f"Error: Could not find data file for DU model '{args.du}' (tried '{filename}')")
+                return
+                
+        # Resolve milestone column indices
+        if filename not in mappings:
+            print(f"Error: No milestone mappings config found for '{filename}'")
+            return
+            
+        mapping_info = mappings[filename]
+        kpi_milestones = {
+            "MC_MOS": ("MC", "MOS", 14),
+            "TI_L1": ("TI", "L1", 14),
+            "MC_PAC": ("MC", "PAC", 30)
+        }
+        
+        start_ms, target_ms, threshold = kpi_milestones[args.kpi]
+        start_col = mapping_info.get(start_ms)
+        target_col = mapping_info.get(target_ms)
+        
+        if start_col is None or target_col is None:
+            print(f"Error: Required milestone columns ({start_ms} or {target_ms}) are not mapped for '{filename}'")
+            return
+            
+        critical_sites = []
+        try:
+            with open(path, 'r', encoding='utf-8') as file:
+                reader = csv.reader(file)
+                # Skip 4 header lines
+                for _ in range(4):
+                    next(reader)
+                    
+                for r_idx, row in enumerate(reader):
+                    start_val = row[start_col] if start_col < len(row) else ""
+                    target_val = row[target_col] if target_col < len(row) else ""
+                    
+                    start_date = parse_date_only(start_val)
+                    target_date = parse_date_only(target_val)
+                    
+                    if start_date and not target_date and start_date.year == target_year:
+                        dur = (today - start_date).days
+                        if dur < 0:
+                            dur = 0
+                        if dur >= threshold:
+                            site_code = row[0] if len(row) > 0 else f"Row {r_idx + 5}"
+                            site_name = row[1] if len(row) > 1 else "Unknown"
+                            critical_sites.append({
+                                "site_code": site_code,
+                                "site_name": site_name,
+                                "start_date": start_val,
+                                "age": dur
+                            })
+        except Exception as e:
+            print(f"Error reading file '{filename}': {e}")
+            return
+            
+        # Print results in markdown format for OpenClaw to print directly!
+        print(f"\n### Critical Backlog Sites for {du_clean} ({start_ms} ➔ {target_ms}, Year {target_year} Only)")
+        print(f"Total Critical (Breached SLA >= {threshold} days) Sites: {len(critical_sites)}\n")
+        if not critical_sites:
+            print("No critical sites found.")
+            return
+            
+        print("| Site Code | Site Name | Start Date | Age (Days) | Status |")
+        print("| :--- | :--- | :---: | :---: | :--- |")
+        for s in sorted(critical_sites, key=lambda x: x["age"], reverse=True):
+            print(f"| {s['site_code']} | {s['site_name']} | {s['start_date']} | {s['age']} | Critical (Breached) |")
+        print()
+        return
+
     # 3. Process CSV files and extract stats
     milestones = ["SOW", "TSS", "MC", "MOS", "TI", "L1", "RFS", "PAC"]
     file_stats = {}

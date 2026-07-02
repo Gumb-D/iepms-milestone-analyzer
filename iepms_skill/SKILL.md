@@ -24,6 +24,14 @@ python scripts/IEPMS_Milestone_Analyzer.py --year <target_year> <fetch_flag>
 ```
 *(For example, since the agent always uses latest data by default, run: `python scripts/IEPMS_Milestone_Analyzer.py --year 2026 --fetch`)*
 
+* **Listing Critical Stage Backlog Sites**:
+  If the user asks for the list of sites in the critical/breached stages for a specific DU Model and KPI, run:
+  ```bash
+  python scripts/IEPMS_Milestone_Analyzer.py --list-critical --du "<du_model>" --kpi "<kpi_key>" --year <target_year>
+  ```
+  *(For example: `python scripts/IEPMS_Milestone_Analyzer.py --list-critical --du "MW EOS Swap" --kpi "MC_MOS" --year 2026`)*
+  This command will print a markdown table listing all critical site codes, names, start dates, and age in days. Copy and print this table verbatim in your response.
+
 * **Interactive Auth Sync Handling**:
   If the command outputs `Waiting for sync request...` (indicating the session cookies are missing or expired):
   
