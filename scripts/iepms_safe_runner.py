@@ -12,6 +12,7 @@ try:
         create_run_context,
         update_latest_pointer,
         verify_downloaded_files,
+        verify_fresh_files,
         write_manifest,
     )
 except ImportError:  # Direct script execution
@@ -21,6 +22,7 @@ except ImportError:  # Direct script execution
         create_run_context,
         update_latest_pointer,
         verify_downloaded_files,
+        verify_fresh_files,
         write_manifest,
     )
 
@@ -156,11 +158,25 @@ def run(argv: Optional[List[str]] = None) -> int:
     downloaded_files = []
     missing_files = []
     if args.fetch:
-        downloaded_files, missing_files = verify_downloaded_files(
+        fresh_xlsx, missing_xlsx = verify_downloaded_files(
             args.input_dir,
             EXPECTED_EXPORTS,
             context.started_epoch,
         )
+        fresh_csv, missing_csv = verify_fresh_files(
+            args.input_dir,
+            EXPECTED_EXPORTS,
+            context.started_epoch,
+            ".csv",
+        )
+        downloaded_files = [
+            name for name in EXPECTED_EXPORTS
+            if name in fresh_xlsx and name in fresh_csv
+        ]
+        missing_files = [
+            name for name in EXPECTED_EXPORTS
+            if name in missing_xlsx or name in missing_csv
+        ]
 
     combined_output = (result.stdout or "") + "\n" + (result.stderr or "")
     failure_marker = next((marker for marker in FETCH_FAILURE_MARKERS if marker in combined_output), None)
@@ -192,7 +208,7 @@ def run(argv: Optional[List[str]] = None) -> int:
             downloaded_files=downloaded_files,
             missing_files=missing_files,
             source=source,
-            error="Incomplete live fetch; not all six expected exports were freshly downloaded",
+            error="Incomplete live fetch; not all six expected exports were freshly downloaded and converted",
         )
 
     working_report = os.path.join(working_dir, f"Milestone_Progress_Report_{args.year}.md")
