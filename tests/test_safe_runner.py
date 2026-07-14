@@ -12,6 +12,21 @@ class SafeRunnerTests(unittest.TestCase):
     def _fake_completed_process(self, command, returncode=0, stdout="ANALYSIS COMPLETE!\n", stderr=""):
         return subprocess.CompletedProcess(command, returncode, stdout=stdout, stderr=stderr)
 
+    def test_run_analyzer_streams_and_captures_output(self):
+        class FakeProcess:
+            stdout = iter(["Waiting for sync request...\n", "ANALYSIS COMPLETE!\n"])
+
+            def wait(self):
+                return 0
+
+        with patch.object(iepms_safe_runner.subprocess, "Popen", return_value=FakeProcess()):
+            with patch("builtins.print") as mocked_print:
+                result = iepms_safe_runner._run_analyzer(["python", "analyzer.py"], "/tmp")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "Waiting for sync request...\nANALYSIS COMPLETE!\n")
+        mocked_print.assert_any_call("Waiting for sync request...\n", end="")
+
     def test_parser_rejects_missing_mode(self):
         with self.assertRaises(SystemExit):
             iepms_safe_runner.parse_args([])
@@ -23,7 +38,7 @@ class SafeRunnerTests(unittest.TestCase):
             docs_dir = os.path.join(tmp, "docs")
             os.makedirs(input_dir)
 
-            def fake_run(command, **kwargs):
+            def fake_run(command, cwd):
                 output_index = command.index("--output-dir") + 1
                 working_output = command[output_index]
                 os.makedirs(working_output, exist_ok=True)
@@ -35,7 +50,7 @@ class SafeRunnerTests(unittest.TestCase):
                     handle.write(b"fresh")
                 return self._fake_completed_process(command)
 
-            with patch.object(iepms_safe_runner.subprocess, "run", side_effect=fake_run):
+            with patch.object(iepms_safe_runner, "_run_analyzer", side_effect=fake_run):
                 rc = iepms_safe_runner.run([
                     "--fetch",
                     "--year", "2026",
@@ -65,7 +80,7 @@ class SafeRunnerTests(unittest.TestCase):
             docs_dir = os.path.join(tmp, "docs")
             os.makedirs(input_dir)
 
-            def fake_run(command, **kwargs):
+            def fake_run(command, cwd):
                 output_index = command.index("--output-dir") + 1
                 working_output = command[output_index]
                 docs_index = command.index("--docs-dir") + 1
@@ -78,7 +93,7 @@ class SafeRunnerTests(unittest.TestCase):
                     handle.write("mapping")
                 return self._fake_completed_process(command)
 
-            with patch.object(iepms_safe_runner.subprocess, "run", side_effect=fake_run):
+            with patch.object(iepms_safe_runner, "_run_analyzer", side_effect=fake_run):
                 rc = iepms_safe_runner.run([
                     "--offline",
                     "--year", "2026",
@@ -104,7 +119,7 @@ class SafeRunnerTests(unittest.TestCase):
             docs_dir = os.path.join(tmp, "docs")
             os.makedirs(input_dir)
 
-            def fake_run(command, **kwargs):
+            def fake_run(command, cwd):
                 output_index = command.index("--output-dir") + 1
                 working_output = command[output_index]
                 os.makedirs(working_output, exist_ok=True)
@@ -115,7 +130,7 @@ class SafeRunnerTests(unittest.TestCase):
                     handle.write("report built from stale csv")
                 return self._fake_completed_process(command)
 
-            with patch.object(iepms_safe_runner.subprocess, "run", side_effect=fake_run):
+            with patch.object(iepms_safe_runner, "_run_analyzer", side_effect=fake_run):
                 rc = iepms_safe_runner.run([
                     "--fetch",
                     "--year", "2026",
@@ -134,7 +149,7 @@ class SafeRunnerTests(unittest.TestCase):
             docs_dir = os.path.join(tmp, "docs")
             os.makedirs(input_dir)
 
-            def fake_run(command, **kwargs):
+            def fake_run(command, cwd):
                 output_index = command.index("--output-dir") + 1
                 working_output = command[output_index]
                 os.makedirs(working_output, exist_ok=True)
@@ -150,7 +165,7 @@ class SafeRunnerTests(unittest.TestCase):
                     stdout="Error processing file MW_EOS_Swap.csv: bad row\nANALYSIS COMPLETE!\n",
                 )
 
-            with patch.object(iepms_safe_runner.subprocess, "run", side_effect=fake_run):
+            with patch.object(iepms_safe_runner, "_run_analyzer", side_effect=fake_run):
                 rc = iepms_safe_runner.run([
                     "--fetch",
                     "--year", "2026",
@@ -169,7 +184,7 @@ class SafeRunnerTests(unittest.TestCase):
             docs_dir = os.path.join(tmp, "docs")
             os.makedirs(input_dir)
 
-            def fake_run(command, **kwargs):
+            def fake_run(command, cwd):
                 output_index = command.index("--output-dir") + 1
                 working_output = command[output_index]
                 docs_index = command.index("--docs-dir") + 1
@@ -185,7 +200,7 @@ class SafeRunnerTests(unittest.TestCase):
                     handle.write("verified live report")
                 return self._fake_completed_process(command)
 
-            with patch.object(iepms_safe_runner.subprocess, "run", side_effect=fake_run):
+            with patch.object(iepms_safe_runner, "_run_analyzer", side_effect=fake_run):
                 rc = iepms_safe_runner.run([
                     "--fetch",
                     "--year", "2026",
