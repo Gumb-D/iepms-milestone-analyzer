@@ -48,6 +48,18 @@ class RuntimeStateTests(unittest.TestCase):
         self.assertEqual(line, expected)
         self.assertEqual(output.getvalue(), expected + "\n")
 
+    def test_emit_run_state_sanitizes_whitespace_to_keep_one_line(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            line = emit_run_state(
+                "FAILED",
+                reason="network request\ntimed out",
+            )
+
+        expected = "RUN_STATE stage=FAILED reason=network_request_timed_out"
+        self.assertEqual(line, expected)
+        self.assertEqual(output.getvalue(), expected + "\n")
+
     def test_poll_window_tracks_elapsed_remaining_and_pending_names(self):
         clock = FakeClock()
         window = PollWindow(
