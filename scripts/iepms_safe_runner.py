@@ -38,6 +38,8 @@ EXPECTED_EXPORTS = [
 FETCH_FAILURE_MARKERS = (
     "API fetch failed or was incomplete",
     "timed out or failed to export",
+    "Failed to convert:",
+    "Error processing file",
     "[FAILED]",
 )
 
