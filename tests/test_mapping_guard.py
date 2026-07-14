@@ -1,6 +1,6 @@
 import unittest
 
-from scripts import IEPMS_Milestone_Analyzer as analyzer
+from scripts import mapping_guard
 
 
 class MilestoneMappingGuardTests(unittest.TestCase):
@@ -14,16 +14,11 @@ class MilestoneMappingGuardTests(unittest.TestCase):
         headers[3][index] = display
 
     def _resolve(self, headers, configured):
-        resolver = getattr(analyzer, "resolve_mapping_indices", None)
-        if resolver is None:
-            self.fail("resolve_mapping_indices is not implemented")
-        return resolver("TX_Mini_Project.csv", headers, configured)
-
-    def _validation_error(self):
-        error_type = getattr(analyzer, "MappingValidationError", None)
-        if error_type is None:
-            self.fail("MappingValidationError is not implemented")
-        return error_type
+        return mapping_guard.resolve_mapping_indices(
+            "TX_Mini_Project.csv",
+            headers,
+            configured,
+        )
 
     def test_rebinds_tx_mini_rfs_from_planned_end_119_to_actual_end_121(self):
         headers = self._headers()
@@ -67,7 +62,7 @@ class MilestoneMappingGuardTests(unittest.TestCase):
             "planned end time",
         )
 
-        with self.assertRaises(self._validation_error()):
+        with self.assertRaises(mapping_guard.MappingValidationError):
             self._resolve(headers, {"RFS": 119})
 
     def test_rejects_ambiguous_actual_completion_candidates(self):
@@ -82,7 +77,7 @@ class MilestoneMappingGuardTests(unittest.TestCase):
                 "actual end time",
             )
 
-        with self.assertRaises(self._validation_error()):
+        with self.assertRaises(mapping_guard.MappingValidationError):
             self._resolve(headers, {"RFS": 119})
 
     def test_keeps_a_valid_actual_completion_hint(self):
