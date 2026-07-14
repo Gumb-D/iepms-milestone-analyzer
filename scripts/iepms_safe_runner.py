@@ -73,11 +73,30 @@ def parse_args(argv: Optional[List[str]] = None):
     return parser.parse_args(argv)
 
 
-def _print_process_output(result: subprocess.CompletedProcess) -> None:
-    if result.stdout:
-        print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
-    if result.stderr:
-        print(result.stderr, file=sys.stderr, end="" if result.stderr.endswith("\n") else "\n")
+def _run_analyzer(command: List[str], cwd: str) -> subprocess.CompletedProcess:
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        env=env,
+    )
+    output_lines = []
+    if process.stdout is not None:
+        for line in process.stdout:
+            print(line, end="")
+            output_lines.append(line)
+    return_code = process.wait()
+    return subprocess.CompletedProcess(
+        command,
+        return_code,
+        stdout="".join(output_lines),
+        stderr="",
+    )
 
 
 def _failure(
@@ -137,12 +156,9 @@ def run(argv: Optional[List[str]] = None) -> int:
         command.append("--no-convert")
 
     try:
-        result = subprocess.run(
+        result = _run_analyzer(
             command,
-            cwd=os.path.dirname(os.path.abspath(args.analyzer_script)),
-            capture_output=True,
-            text=True,
-            check=False,
+            os.path.dirname(os.path.abspath(args.analyzer_script)),
         )
     except OSError as exc:
         return _failure(
@@ -154,8 +170,6 @@ def run(argv: Optional[List[str]] = None) -> int:
             source=source,
             error=f"Analyzer could not start: {exc}",
         )
-
-    _print_process_output(result)
 
     downloaded_files = []
     missing_files = []
