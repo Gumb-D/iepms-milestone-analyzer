@@ -67,15 +67,16 @@ def create_run_context(
     )
 
 
-def verify_downloaded_files(
+def verify_fresh_files(
     input_dir: str,
     expected_files: Iterable[str],
     run_started_epoch: float,
+    extension: str,
 ) -> Tuple[List[str], List[str]]:
     downloaded = []
     missing = []
     for clean_name in expected_files:
-        path = os.path.join(input_dir, f"{clean_name}.xlsx")
+        path = os.path.join(input_dir, f"{clean_name}{extension}")
         try:
             stat = os.stat(path)
         except FileNotFoundError:
@@ -86,6 +87,14 @@ def verify_downloaded_files(
             continue
         downloaded.append(clean_name)
     return downloaded, missing
+
+
+def verify_downloaded_files(
+    input_dir: str,
+    expected_files: Iterable[str],
+    run_started_epoch: float,
+) -> Tuple[List[str], List[str]]:
+    return verify_fresh_files(input_dir, expected_files, run_started_epoch, ".xlsx")
 
 
 def write_manifest(
