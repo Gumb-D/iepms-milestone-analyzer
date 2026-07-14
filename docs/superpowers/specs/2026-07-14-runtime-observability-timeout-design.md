@@ -93,6 +93,7 @@ Each manifest gains:
 {
   "timings": {
     "total_seconds": 0.0,
+    "fetch_seconds": 0.0,
     "analyzer_seconds": 0.0,
     "verification_seconds": 0.0
   },
@@ -103,24 +104,28 @@ Each manifest gains:
 }
 ```
 
-The safe runner can measure analyzer and verification time reliably. Authentication, export, conversion, and analysis phase timing will be inferred from timestamped `RUN_STATE` output during benchmark collection; the legacy analyzer does not expose structured callbacks.
+The safe runner owns live export retrieval and therefore measures fetch, analyzer, verification, and total time directly. Authentication wait is included in `fetch_seconds`; agents must still recognize `WAITING_FOR_AUTH` as a user-dependent pause rather than a hang.
 
 ## Implementation boundary
 
-The legacy analyzer receives the timeout and interval through two new hidden CLI arguments passed by the safe runner. The only changes inside the legacy analyzer are:
+Live export orchestration is extracted into `scripts/live_fetch.py`. It imports the existing `PROJECT_CONFIGS` and authentication server from the legacy analyzer, but owns:
 
-- parse the two values;
-- emit state lines around existing phases;
-- replace `max_polls` with a monotonic deadline.
+- authentication validation and sync state output;
+- export submission;
+- monotonic time-based polling;
+- download completion and pending-file reporting.
 
-All mapping and report-generation code remains byte-for-byte unchanged outside the minimum polling and state-output areas.
+The safe runner calls the isolated live fetcher first, then invokes the legacy analyzer without `--fetch` to perform XLSX-to-CSV conversion and report calculation. This keeps `scripts/IEPMS_Milestone_Analyzer.py` unchanged, providing stronger protection for mappings, identifiers, formulas, and SLA logic.
+
+`scripts/runtime_state.py` owns positive integer validation, state formatting, and the polling deadline. The safe runner owns manifest timing and runtime metadata.
 
 ## Failure handling
 
-- Timeout leaves the pending export names in the failed manifest.
-- A partial report created by the legacy analyzer remains quarantined and is deleted by the safe runner.
+- Timeout preserves pending export names in console state and the failed manifest freshness diagnostics.
+- The analyzer is not started after an incomplete live export set.
+- A partial report created during conversion or analysis remains quarantined and is deleted by the safe runner.
 - `output/latest.json` is updated only after full verification succeeds.
-- Existing failure markers remain authoritative.
+- Conversion output matching `Failed to convert <filename>:` is treated as a failure.
 
 ## Testing
 
@@ -128,10 +133,11 @@ Automated tests cover:
 
 - CLI defaults and overrides;
 - positive integer validation;
-- forwarding options from safe runner to analyzer;
+- isolated fetch option forwarding;
 - time-based polling success and timeout with mocked monotonic time and sleep;
 - polling `RUN_STATE` fields;
 - success and failure manifest timing/runtime metadata;
+- exact legacy conversion-failure output;
 - all existing fail-closed behavior.
 
 A Windows/ZTE VPN Live UAT remains required before merge.
