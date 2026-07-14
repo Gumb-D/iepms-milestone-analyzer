@@ -55,6 +55,17 @@ MILESTONE_KEYWORDS = {
     },
 }
 
+# File-specific business identities take precedence over generic milestone keywords.
+# For TX Mini Project, RFS is completed only by the TX Integrated task under
+# Software Commissioning. Nearby MRCF, Site Integrated, Cutover, or other
+# actual-end columns are not valid substitutes.
+REQUIRED_IDENTITIES = {
+    ("TX_Mini_Project.csv", "RFS"): {
+        "stage": "software commissioning",
+        "task": "tx integrated",
+    },
+}
+
 
 class MappingValidationError(ValueError):
     pass
@@ -69,6 +80,19 @@ def _column_values(headers: Sequence[Sequence[str]], index: int) -> List[str]:
         str(row[index]).strip() if index < len(row) else ""
         for row in headers[:4]
     ]
+
+
+def _matches_required_identity(
+    filename: str,
+    milestone: str,
+    values: Sequence[str],
+) -> bool:
+    required = REQUIRED_IDENTITIES.get((filename, milestone))
+    if required is None:
+        return True
+
+    _field_id, stage, task, _display = (_normalise(value) for value in values)
+    return stage == required["stage"] and task == required["task"]
 
 
 def _is_actual_completion(milestone: str, values: Sequence[str]) -> bool:
@@ -143,6 +167,8 @@ def resolve_mapping_indices(
         scored_candidates = []
         for index in range(column_count):
             values = _column_values(headers, index)
+            if not _matches_required_identity(filename, milestone, values):
+                continue
             if not _is_actual_completion(milestone, values):
                 continue
             score = _candidate_score(milestone, values)
@@ -150,9 +176,16 @@ def resolve_mapping_indices(
                 scored_candidates.append((score, index, values))
 
         if not scored_candidates:
+            required = REQUIRED_IDENTITIES.get((filename, milestone))
+            identity_note = ""
+            if required is not None:
+                identity_note = (
+                    f"; required stage/task is "
+                    f"{required['stage']} / {required['task']}"
+                )
             raise MappingValidationError(
                 f"{filename} {milestone}: no unique actual-completion header matches; "
-                f"configured index {hint} is not trusted"
+                f"configured index {hint} is not trusted{identity_note}"
             )
 
         best_score = max(score for score, _index, _values in scored_candidates)
