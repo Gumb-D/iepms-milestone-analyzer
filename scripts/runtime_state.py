@@ -1,7 +1,7 @@
 import argparse
 import math
 import time
-from typing import Callable, Iterable, Optional
+from typing import Callable, Iterable
 
 
 def positive_int(value: str) -> int:
@@ -14,9 +14,13 @@ def positive_int(value: str) -> int:
     return parsed
 
 
+def _state_value(value) -> str:
+    return "_".join(str(value).split())
+
+
 def emit_run_state(stage: str, **fields) -> str:
-    parts = ["RUN_STATE", f"stage={stage}"]
-    parts.extend(f"{key}={value}" for key, value in fields.items())
+    parts = ["RUN_STATE", f"stage={_state_value(stage)}"]
+    parts.extend(f"{key}={_state_value(value)}" for key, value in fields.items())
     line = " ".join(parts)
     print(line, flush=True)
     return line
