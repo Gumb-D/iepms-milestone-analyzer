@@ -60,8 +60,10 @@ class TrackingPendingRequests:
 class ReadyRequests:
     def __init__(self):
         self.calls = 0
+        self.timeouts = []
 
     def get(self, url, **kwargs):
+        self.timeouts.append(kwargs.get("timeout"))
         if "download" in url:
             return FakeResponse(content=b"fresh export")
         self.calls += 1
@@ -142,6 +144,7 @@ class LiveFetchPollingTests(unittest.TestCase):
 
     def test_polling_downloads_ready_export_before_deadline(self):
         clock = FakeClock()
+        requests = ReadyRequests()
 
         with tempfile.TemporaryDirectory() as tmp:
             result = live_fetch._poll_pending_files(
@@ -150,7 +153,7 @@ class LiveFetchPollingTests(unittest.TestCase):
                 script_start_time=live_fetch.datetime.datetime(2026, 7, 14, 11, 0, 0),
                 timeout_seconds=10,
                 interval_seconds=2,
-                requests_module=ReadyRequests(),
+                requests_module=requests,
                 monotonic=clock.monotonic,
                 sleeper=clock.sleep,
             )
@@ -162,6 +165,7 @@ class LiveFetchPollingTests(unittest.TestCase):
                 self.assertEqual(handle.read(), b"fresh export")
 
         self.assertEqual(clock.sleeps, [2])
+        self.assertEqual(requests.timeouts, [8.0, 8.0])
 
     def test_live_fetch_module_does_not_use_fixed_attempt_limit(self):
         with open(live_fetch.__file__, encoding="utf-8") as handle:
