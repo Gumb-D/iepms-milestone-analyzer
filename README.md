@@ -14,8 +14,8 @@ The safe runner:
 
 - requires an explicit `--fetch` or `--offline` mode;
 - isolates each execution under `output/runs/<run_id>/`;
-- requires all six configured exports to be newly downloaded and non-empty in live mode;
-- rejects analyzer warnings, non-zero exits, incomplete downloads, and missing reports;
+- requires all six configured XLSX exports and their converted CSV inputs to be newly generated and non-empty in live mode;
+- rejects analyzer warnings, conversion errors, file-processing errors, non-zero exits, incomplete inputs, and missing reports;
 - writes a machine-readable `manifest.json` for every run;
 - updates `output/latest.json` only after a verified successful run;
 - never publishes a report from a failed live fetch.
@@ -52,7 +52,9 @@ Live success requires these six exports to be downloaded during the current exec
 5. `MW_EOS_Swap.xlsx`
 6. `ZTE_TX_MINI.xlsx`
 
-If even one file is missing, empty, or older than the current run start time, the command exits with code `2`, writes a failed manifest, removes the working report, and leaves `output/latest.json` unchanged.
+Each export must also produce a corresponding fresh, non-empty `.csv` file during the same run. The report is rejected when an XLSX or CSV is missing, empty, stale, fails conversion, or raises a file-processing error.
+
+On failure, the command exits with code `2`, writes a failed manifest, removes the working report, and leaves `output/latest.json` unchanged.
 
 ## Offline Mode — Explicit Local Data
 
