@@ -34,6 +34,7 @@ EXPECTED_EXPORTS = [
     "MW_EOS_Swap",
     "ZTE_TX_MINI",
 ]
+EXPECTED_REPORT_MODELS = [name.replace("_", " ") for name in EXPECTED_EXPORTS]
 
 FETCH_FAILURE_MARKERS = (
     "API fetch failed or was incomplete",
@@ -248,6 +249,24 @@ def run(argv: Optional[List[str]] = None) -> int:
             source=source,
             error="Analyzer did not produce a non-empty report",
         )
+    if args.fetch:
+        with open(working_report, "r", encoding="utf-8") as handle:
+            report_text = handle.read()
+        missing_report_exports = [
+            clean_name
+            for clean_name, model_name in zip(EXPECTED_EXPORTS, EXPECTED_REPORT_MODELS)
+            if f"#### DU Model: {model_name}" not in report_text
+        ]
+        if missing_report_exports:
+            return _failure(
+                context,
+                working_dir,
+                expected_files=expected_files,
+                downloaded_files=downloaded_files,
+                missing_files=missing_report_exports,
+                source=source,
+                error="Generated report is missing one or more expected DU models",
+            )
 
     os.replace(working_report, context.report_path)
     working_mapping = os.path.join(working_docs, "milestone_mappings.md")
