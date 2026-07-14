@@ -127,6 +127,41 @@ class SafeRunnerTests(unittest.TestCase):
             self.assertNotEqual(rc, 0)
             self.assertFalse(os.path.exists(os.path.join(output_dir, "latest.json")))
 
+    def test_live_fetch_rejects_partial_analysis_errors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            input_dir = os.path.join(tmp, "input")
+            output_dir = os.path.join(tmp, "output")
+            docs_dir = os.path.join(tmp, "docs")
+            os.makedirs(input_dir)
+
+            def fake_run(command, **kwargs):
+                output_index = command.index("--output-dir") + 1
+                working_output = command[output_index]
+                os.makedirs(working_output, exist_ok=True)
+                for clean_name in iepms_safe_runner.EXPECTED_EXPORTS:
+                    with open(os.path.join(input_dir, clean_name + ".xlsx"), "wb") as handle:
+                        handle.write(b"fresh")
+                    with open(os.path.join(input_dir, clean_name + ".csv"), "w", encoding="utf-8") as handle:
+                        handle.write("fresh csv")
+                with open(os.path.join(working_output, "Milestone_Progress_Report_2026.md"), "w", encoding="utf-8") as handle:
+                    handle.write("partial report")
+                return self._fake_completed_process(
+                    command,
+                    stdout="Error processing file MW_EOS_Swap.csv: bad row\nANALYSIS COMPLETE!\n",
+                )
+
+            with patch.object(iepms_safe_runner.subprocess, "run", side_effect=fake_run):
+                rc = iepms_safe_runner.run([
+                    "--fetch",
+                    "--year", "2026",
+                    "--input-dir", input_dir,
+                    "--output-dir", output_dir,
+                    "--docs-dir", docs_dir,
+                ])
+
+            self.assertNotEqual(rc, 0)
+            self.assertFalse(os.path.exists(os.path.join(output_dir, "latest.json")))
+
     def test_live_success_requires_all_six_fresh_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             input_dir = os.path.join(tmp, "input")
