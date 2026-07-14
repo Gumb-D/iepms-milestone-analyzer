@@ -2,38 +2,44 @@
 
 ## Objective
 
-Prevent the analyzer or its agent playbooks from presenting stale, simulated, or fabricated IEPMS results when a live ZTE EPMS fetch fails, is incomplete, or cannot be verified as belonging to the current execution.
+Prevent the analyzer or its agent playbooks from presenting stale, partial, simulated, or fabricated IEPMS results when a live ZTE EPMS fetch fails, conversion fails, file processing is incomplete, or the output cannot be proven to belong to the current execution.
 
 ## Scope
 
-This change covers the analyzer CLI, run metadata, output lifecycle, tests, README, and both skill playbooks. It does not redesign authentication or change milestone/SLA calculations.
+This change adds a protective execution layer, per-run metadata, tests, README guidance, and agent guardrails. It intentionally leaves the existing milestone mappings, SLA thresholds, API integration, and report calculations unchanged.
 
 ## Selected Approach
 
-Use an explicit execution-mode contract with fail-closed live mode and opt-in offline mode.
+Use a fail-closed wrapper around the legacy analyzer instead of refactoring its approximately 1,200-line calculation script in the first safety fix.
 
-- `--fetch` means `LIVE_FETCH`: every configured export must be freshly downloaded during the current run.
-- `--offline` means `OFFLINE_LOCAL`: existing local input files may be analyzed without a live fetch.
-- Running without either mode is rejected to remove ambiguous fallback behavior.
-- A live-fetch failure exits non-zero before conversion, analysis, report generation, or latest-pointer updates.
+- `scripts/iepms_safe_runner.py` is the supported entry point.
+- `scripts/IEPMS_Milestone_Analyzer.py` remains the calculation engine.
+- `--fetch` means `LIVE_FETCH` and requires complete current-run evidence.
+- `--offline` means `OFFLINE_LOCAL` and explicitly permits existing local inputs.
+- Running without exactly one mode is rejected.
 
-This is preferred over deleting old reports because deleting destroys the last valid result and still does not prove that a new report came from the current run. It is also preferred over timestamp-only checking because timestamps alone cannot prove completeness across all expected files.
+This wrapper approach minimizes regression risk while immediately blocking stale report publication. A later refactor may move the contract directly into the analyzer after live UAT proves the behavior.
 
 ## Run Lifecycle
 
-1. Create a unique run ID using Malaysia time in `YYYYMMDDTHHMMSS+0800` form.
-2. Record start time, target year, mode, expected export names, and output paths in memory.
-3. For `LIVE_FETCH`, submit and download every configured export.
-4. Verify that every expected file was downloaded during this run and is non-empty.
-5. If verification fails:
-   - write a failed manifest under the run directory;
-   - return a non-zero exit code;
-   - do not generate a report;
-   - do not update `output/latest.json`.
-6. If verification succeeds, convert and analyze inputs using existing business logic.
-7. Write the report into the run directory.
-8. Write a success manifest containing exact source and output metadata.
-9. Atomically update `output/latest.json` to point to the successful manifest.
+1. Create a Malaysia-time run ID and isolated run directory.
+2. Execute the legacy analyzer in a quarantine output directory under the run directory.
+3. Capture its exit code, stdout, and stderr.
+4. In live mode, verify all six configured exports have both:
+   - a fresh, non-empty XLSX written after the run start;
+   - a fresh, non-empty CSV written after the run start.
+5. Reject known failure markers, including incomplete fetch, server export failure, conversion failure, and per-file processing errors.
+6. Require the legacy completion marker and a non-empty quarantine report.
+7. On failure:
+   - delete the quarantine output;
+   - write a failed manifest;
+   - return exit code `2`;
+   - do not update `output/latest.json`;
+   - do not publish a report in the run directory.
+8. On success:
+   - move the report and mapping evidence into the run directory;
+   - write a success manifest;
+   - atomically update `output/latest.json`.
 
 ## Output Structure
 
@@ -43,10 +49,11 @@ output/
     <run_id>/
       manifest.json
       Milestone_Progress_Report_<year>.md
+      milestone_mappings.md
   latest.json
 ```
 
-The legacy fixed report path is no longer the authoritative source for agent responses. The latest pointer is updated only after a fully successful run.
+Failed runs retain only diagnostic metadata. The fixed legacy report path is not authoritative.
 
 ## Manifest Contract
 
@@ -66,52 +73,62 @@ Required fields:
 - `source`
 - `error`
 
-For `LIVE_FETCH`, `status=SUCCESS` requires `downloaded_files` to exactly match `expected_files` and `missing_files` to be empty.
+For live success, `downloaded_files` contains an export name only when both its XLSX and CSV pass current-run freshness and non-empty checks. `expected_files` and `downloaded_files` must match exactly, and `missing_files` must be empty.
 
 ## Agent Safety Contract
 
 Both skill playbooks must enforce:
 
 1. Never fabricate, estimate, simulate, reconstruct, or reuse remembered IEPMS figures.
-2. Never present a report unless the current command exits successfully.
-3. Read `output/latest.json`, then read the referenced manifest.
-4. Confirm the manifest run ID belongs to the current execution, has `status=SUCCESS`, and matches the requested year and execution mode.
-5. In live mode, confirm expected and downloaded file sets match exactly.
-6. Copy tables only from the report path declared by the verified manifest.
-7. On any failure, return the factual error only; do not fall back to old files or old reports.
+2. Execute through the safe runner.
+3. Require exit code zero and the `VERIFIED ANALYSIS COMPLETE!` marker.
+4. Read `output/latest.json`, then the referenced manifest.
+5. Confirm current run ID, target year, mode, source, status, and live file-set equality.
+6. Read only the report path declared by the verified manifest.
+7. On any failure, return the factual error only and never fall back to an old report.
 
 ## Error Handling
 
-- Authentication wait remains interactive, but cancellation, timeout, unauthorized responses, export failures, missing records, incomplete downloads, and zero-byte files are live-fetch failures.
-- Failed runs preserve their manifest for diagnosis.
-- Existing successful runs remain untouched.
-- Offline mode clearly labels the source as local and must not claim that data is latest.
+Live mode fails closed for:
+
+- analyzer start failure;
+- non-zero analyzer exit;
+- authentication/export failure markers;
+- incomplete or stale XLSX files;
+- incomplete or stale CSV files;
+- XLSX-to-CSV conversion errors;
+- per-file processing errors;
+- missing completion marker;
+- missing or empty report.
+
+Offline mode clearly labels the source as local and must not claim that data is latest.
 
 ## Testing Strategy
 
-Automated tests will cover:
+Network-free `unittest` coverage verifies:
 
-- incomplete live fetch returns non-zero;
-- incomplete live fetch does not generate a report;
-- incomplete live fetch does not update `latest.json`;
-- successful live fetch writes a valid success manifest;
-- offline mode is explicit and writes `OFFLINE_LOCAL` metadata;
-- ambiguous invocation without `--fetch` or `--offline` is rejected;
-- existing progress and SLA generation remains callable for valid local fixtures.
-
-Network calls will be isolated behind testable functions and mocked. Tests will use temporary directories and no ZTE credentials.
+- explicit mode is mandatory;
+- stale or incomplete live exports fail;
+- fresh XLSX with stale/missing CSV fails;
+- partial file-processing errors fail even when the legacy analyzer prints completion;
+- failed runs publish no report and do not update `latest.json`;
+- failed manifests preserve diagnostics;
+- successful live runs require all six verified export pairs;
+- successful offline runs publish `OFFLINE_LOCAL` metadata;
+- JSON writes and latest-pointer replacement are atomic.
 
 ## Compatibility and Migration
 
-- Existing commands using `--fetch` continue to work when all downloads succeed.
-- Existing commands without `--fetch` must add `--offline`.
-- Agent consumers must switch from the fixed report path to the manifest-declared report path.
-- No change is made to milestone mapping or SLA thresholds.
+- Existing live automation must change its command to `python scripts/iepms_safe_runner.py --fetch --year <year>`.
+- Intentional local analysis must use `--offline`.
+- Detailed backlog queries may use the legacy CLI only after a safe-runner execution has verified the input set.
+- Milestone calculations and SLA thresholds remain unchanged.
 
 ## Acceptance Criteria
 
-- The analyzer cannot print `ANALYSIS COMPLETE` after a failed live fetch.
-- No failed live run can overwrite or supersede the last successful run.
-- Every presented live report can be traced to a successful current-run manifest.
-- Skill instructions explicitly prohibit generated fallback data.
-- Tests pass without network access.
+- A failed live run cannot publish or supersede a report.
+- A report based on stale CSV inputs cannot be published.
+- A partial report cannot be published when any file-processing error is reported.
+- Every successful report is traceable to a current-run success manifest.
+- Agent instructions explicitly prohibit generated fallback data.
+- All tests pass without ZTE network access or credentials.
