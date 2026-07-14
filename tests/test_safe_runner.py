@@ -9,6 +9,25 @@ from scripts import iepms_safe_runner
 
 
 class SafeRunnerTests(unittest.TestCase):
+    def setUp(self):
+        def fake_fetch(script_dir, input_dir, **kwargs):
+            names = iepms_safe_runner.EXPECTED_EXPORTS
+            if self._testMethodName == "test_live_fetch_fails_closed_when_any_expected_file_is_not_fresh":
+                names = names[:1]
+            os.makedirs(input_dir, exist_ok=True)
+            for clean_name in names:
+                with open(os.path.join(input_dir, clean_name + ".xlsx"), "wb") as handle:
+                    handle.write(b"fresh live export")
+            return True
+
+        self.fetch_patcher = patch.object(
+            iepms_safe_runner,
+            "fetch_latest_exports",
+            side_effect=fake_fetch,
+        )
+        self.fetch_patcher.start()
+        self.addCleanup(self.fetch_patcher.stop)
+
     def _fake_completed_process(self, command, returncode=0, stdout="ANALYSIS COMPLETE!\n", stderr=""):
         return subprocess.CompletedProcess(command, returncode, stdout=stdout, stderr=stderr)
 
@@ -70,7 +89,7 @@ class SafeRunnerTests(unittest.TestCase):
             with open(manifests[0], encoding="utf-8") as handle:
                 manifest = json.load(handle)
             self.assertEqual(manifest["status"], "FAILED")
-            self.assertEqual(manifest["downloaded_files"], [])
+            self.assertEqual(manifest["downloaded_files"], [iepms_safe_runner.EXPECTED_EXPORTS[0]])
             self.assertGreater(len(manifest["missing_files"]), 0)
 
     def test_offline_success_publishes_verified_manifest_and_latest_pointer(self):

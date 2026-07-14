@@ -107,9 +107,11 @@ def write_manifest(
     source: str,
     report_path: Optional[str] = None,
     error: Optional[str] = None,
+    timings: Optional[dict] = None,
+    runtime: Optional[dict] = None,
 ) -> str:
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "run_id": context.run_id,
         "status": status,
         "mode": context.mode,
@@ -122,6 +124,8 @@ def write_manifest(
         "report_path": os.path.abspath(report_path) if report_path else None,
         "source": source,
         "error": error,
+        "timings": dict(timings or {}),
+        "runtime": dict(runtime or {}),
     }
     return _atomic_write_json(context.manifest_path, payload)
 

@@ -22,7 +22,7 @@ jobs:
           python-version: "3.11"
 
       - name: Compile Python modules
-        run: python -m py_compile scripts/IEPMS_Milestone_Analyzer.py scripts/iepms_safe_runner.py scripts/run_contract.py
+        run: python -m py_compile scripts/IEPMS_Milestone_Analyzer.py scripts/iepms_safe_runner.py scripts/live_fetch.py scripts/run_contract.py scripts/runtime_state.py
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
