@@ -200,6 +200,13 @@ def _submit_exports(auth: dict, project_configs: dict, requests_module) -> Dict[
     return pending_files
 
 
+def _bounded_timeout(window: PollWindow, maximum_seconds: float) -> float:
+    remaining = window.remaining()
+    if remaining <= 0:
+        return 0.0
+    return min(float(maximum_seconds), remaining)
+
+
 def _poll_pending_files(
     pending_files: Dict[str, dict],
     *,
@@ -226,6 +233,8 @@ def _poll_pending_files(
     while pending_files and not window.expired():
         emit_run_state("POLLING", **window.snapshot(pending_files.keys()))
         window.sleep()
+        if window.expired():
+            break
 
         projects_to_query: Dict[str, dict] = {}
         for clean_name, info in list(pending_files.items()):
@@ -237,6 +246,9 @@ def _poll_pending_files(
             project["files"].append(clean_name)
 
         for project_id, project_data in projects_to_query.items():
+            record_timeout = _bounded_timeout(window, 30)
+            if record_timeout <= 0:
+                break
             params = {
                 "operationType": "EXPORT",
                 "pageNo": "1",
@@ -249,14 +261,18 @@ def _poll_pending_files(
                     headers=project_data["headers"],
                     cookies=project_data["cookies"],
                     params=params,
-                    timeout=30,
+                    timeout=record_timeout,
                 )
+                if window.expired():
+                    break
                 if response.status_code != 200:
                     continue
                 body = response.json().get("bo")
                 rows = body.get("rows", []) if body else []
 
                 for clean_name in list(project_data["files"]):
+                    if window.expired():
+                        break
                     info = pending_files.get(clean_name)
                     if info is None:
                         continue
@@ -286,6 +302,9 @@ def _poll_pending_files(
                     progress = matched_row.get("schedule")
                     ticket = matched_row.get("operationNo")
                     if status == "SUCCESS" and progress == 100:
+                        download_timeout = _bounded_timeout(window, 60)
+                        if download_timeout <= 0:
+                            break
                         print(f"  [READY] '{pattern}' is complete (Ticket: {ticket}). Downloading...")
                         params = {
                             "docId": matched_row.get("fileId"),
@@ -299,12 +318,18 @@ def _poll_pending_files(
                                 cookies=project_data["cookies"],
                                 params=params,
                                 stream=True,
-                                timeout=60,
+                                timeout=download_timeout,
                             ) as download:
                                 download.raise_for_status()
                                 with open(output_path, "wb") as output:
                                     for chunk in download.iter_content(chunk_size=8192):
                                         output.write(chunk)
+                            if window.expired():
+                                try:
+                                    os.remove(output_path)
+                                except FileNotFoundError:
+                                    pass
+                                break
                             print(f"    -> SUCCESS: Saved {clean_name}.xlsx")
                             del pending_files[clean_name]
                         except Exception as exc:
