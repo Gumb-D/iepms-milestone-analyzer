@@ -48,6 +48,15 @@ class PendingRequests:
         return FakeResponse({"bo": {"rows": []}})
 
 
+class TrackingPendingRequests:
+    def __init__(self):
+        self.calls = []
+
+    def get(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        return FakeResponse({"bo": {"rows": []}})
+
+
 class ReadyRequests:
     def __init__(self):
         self.calls = 0
@@ -110,6 +119,26 @@ class LiveFetchPollingTests(unittest.TestCase):
             output.getvalue(),
         )
         self.assertIn("2023_TX_Rollout", output.getvalue())
+
+    def test_polling_does_not_issue_record_request_after_sleep_consumes_deadline(self):
+        clock = FakeClock()
+        requests = TrackingPendingRequests()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result = live_fetch._poll_pending_files(
+                self._pending(),
+                input_dir=tmp,
+                script_start_time=live_fetch.datetime.datetime(2026, 7, 14, 11, 0, 0),
+                timeout_seconds=5,
+                interval_seconds=5,
+                requests_module=requests,
+                monotonic=clock.monotonic,
+                sleeper=clock.sleep,
+            )
+
+        self.assertFalse(result)
+        self.assertEqual(clock.sleeps, [5])
+        self.assertEqual(requests.calls, [])
 
     def test_polling_downloads_ready_export_before_deadline(self):
         clock = FakeClock()
