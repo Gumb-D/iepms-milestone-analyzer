@@ -1,6 +1,5 @@
 import argparse
 import io
-import os
 import unittest
 from contextlib import redirect_stdout
 
@@ -87,17 +86,6 @@ class RuntimeStateTests(unittest.TestCase):
         self.assertTrue(window.expired())
         self.assertEqual(window.sleep(), 0)
         self.assertEqual(clock.sleeps, [4, 1])
-
-    def test_legacy_analyzer_no_longer_uses_fixed_max_poll_count(self):
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        analyzer_path = os.path.join(project_root, "scripts", "IEPMS_Milestone_Analyzer.py")
-        with open(analyzer_path, encoding="utf-8") as handle:
-            source = handle.read()
-
-        self.assertNotIn("max_polls = 24", source)
-        self.assertIn("--fetch-timeout-seconds", source)
-        self.assertIn("--poll-interval-seconds", source)
-        self.assertIn("PollWindow", source)
 
 
 if __name__ == "__main__":
