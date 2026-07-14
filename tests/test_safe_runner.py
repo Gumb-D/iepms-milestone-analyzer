@@ -55,7 +55,7 @@ class SafeRunnerTests(unittest.TestCase):
             with open(manifests[0], encoding="utf-8") as handle:
                 manifest = json.load(handle)
             self.assertEqual(manifest["status"], "FAILED")
-            self.assertEqual(manifest["downloaded_files"], [iepms_safe_runner.EXPECTED_EXPORTS[0]])
+            self.assertEqual(manifest["downloaded_files"], [])
             self.assertGreater(len(manifest["missing_files"]), 0)
 
     def test_offline_success_publishes_verified_manifest_and_latest_pointer(self):
@@ -97,6 +97,36 @@ class SafeRunnerTests(unittest.TestCase):
             self.assertEqual(manifest["source"], "LOCAL_INPUT")
             self.assertTrue(os.path.exists(manifest["report_path"]))
 
+    def test_live_fetch_fails_when_csv_conversion_is_not_fresh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            input_dir = os.path.join(tmp, "input")
+            output_dir = os.path.join(tmp, "output")
+            docs_dir = os.path.join(tmp, "docs")
+            os.makedirs(input_dir)
+
+            def fake_run(command, **kwargs):
+                output_index = command.index("--output-dir") + 1
+                working_output = command[output_index]
+                os.makedirs(working_output, exist_ok=True)
+                for clean_name in iepms_safe_runner.EXPECTED_EXPORTS:
+                    with open(os.path.join(input_dir, clean_name + ".xlsx"), "wb") as handle:
+                        handle.write(b"fresh xlsx")
+                with open(os.path.join(working_output, "Milestone_Progress_Report_2026.md"), "w", encoding="utf-8") as handle:
+                    handle.write("report built from stale csv")
+                return self._fake_completed_process(command)
+
+            with patch.object(iepms_safe_runner.subprocess, "run", side_effect=fake_run):
+                rc = iepms_safe_runner.run([
+                    "--fetch",
+                    "--year", "2026",
+                    "--input-dir", input_dir,
+                    "--output-dir", output_dir,
+                    "--docs-dir", docs_dir,
+                ])
+
+            self.assertNotEqual(rc, 0)
+            self.assertFalse(os.path.exists(os.path.join(output_dir, "latest.json")))
+
     def test_live_success_requires_all_six_fresh_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             input_dir = os.path.join(tmp, "input")
@@ -114,6 +144,8 @@ class SafeRunnerTests(unittest.TestCase):
                 for clean_name in iepms_safe_runner.EXPECTED_EXPORTS:
                     with open(os.path.join(input_dir, clean_name + ".xlsx"), "wb") as handle:
                         handle.write(b"fresh")
+                    with open(os.path.join(input_dir, clean_name + ".csv"), "w", encoding="utf-8") as handle:
+                        handle.write("fresh csv")
                 with open(os.path.join(working_output, "Milestone_Progress_Report_2026.md"), "w", encoding="utf-8") as handle:
                     handle.write("verified live report")
                 return self._fake_completed_process(command)
