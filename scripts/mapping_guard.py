@@ -67,6 +67,10 @@ REQUIRED_IDENTITIES = {
         "stage": "q&ehs",
         "task": "l1 approved",
     },
+    ("2024_Celcomdigi_BAU.csv", "TSS"): {
+        "stage": "survey&design",
+        "task": "tssr customer approval",
+    },
     ("TX_Mini_Project.csv", "RFS"): {
         "stage": "software commissioning",
         "task": "tx integrated",
