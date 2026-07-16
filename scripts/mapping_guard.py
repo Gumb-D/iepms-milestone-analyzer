@@ -77,6 +77,13 @@ REQUIRED_IDENTITIES = {
     },
 }
 
+# Some DU models do not implement every standard milestone. These explicit N/A
+# declarations override stale integer hints and prevent unrelated fields from being
+# substituted merely to keep the report running.
+UNAVAILABLE_MILESTONES = {
+    ("Jendela_TX_Migration.csv", "TSS"),
+}
+
 
 class MappingValidationError(ValueError):
     pass
@@ -171,6 +178,10 @@ def resolve_mapping_indices(
     resolved: Dict[str, Optional[int]] = {}
 
     for milestone, hint in configured_mapping.items():
+        if (filename, milestone) in UNAVAILABLE_MILESTONES:
+            resolved[milestone] = None
+            continue
+
         if hint is None:
             resolved[milestone] = None
             continue
