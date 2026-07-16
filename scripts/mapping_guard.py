@@ -76,6 +76,10 @@ REQUIRED_IDENTITIES = {
         "stage": "software commissioning",
         "task": "cut over",
     },
+    ("MW_EOS_Swap.csv", "L1"): {
+        "stage": "q&ehs",
+        "task": "l1 approved",
+    },
     ("TX_Mini_Project.csv", "RFS"): {
         "stage": "software commissioning",
         "task": "tx integrated",
