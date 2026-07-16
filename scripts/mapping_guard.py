@@ -56,10 +56,13 @@ MILESTONE_KEYWORDS = {
 }
 
 # File-specific business identities take precedence over generic milestone keywords.
-# For TX Mini Project, RFS is completed only by the TX Integrated task under
-# Software Commissioning. Nearby MRCF, Site Integrated, Cutover, or other
-# actual-end columns are not valid substitutes.
+# They prevent another task with a valid-looking actual-end field from being used as
+# the milestone merely because its wording scores similarly.
 REQUIRED_IDENTITIES = {
+    ("2023_TX_Rollout.csv", "TSS"): {
+        "stage": "survey&design",
+        "task": "physical survey",
+    },
     ("TX_Mini_Project.csv", "RFS"): {
         "stage": "software commissioning",
         "task": "tx integrated",
