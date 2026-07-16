@@ -41,6 +41,7 @@ MILESTONE_KEYWORDS = {
             "tx integration end date",
             "cut-over end date",
             "cutover end date",
+            "cut over",
             "cutover",
         ),
         "stage": ("software commissioning", "operation", "installation"),
