@@ -71,6 +71,10 @@ REQUIRED_IDENTITIES = {
         "stage": "survey&design",
         "task": "tssr customer approval",
     },
+    ("Jendela_TX_Migration.csv", "RFS"): {
+        "stage": "software commissioning",
+        "task": "cut over",
+    },
     ("TX_Mini_Project.csv", "RFS"): {
         "stage": "software commissioning",
         "task": "tx integrated",
