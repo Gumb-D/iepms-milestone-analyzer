@@ -287,11 +287,19 @@ def resolve_config_for_csvs(
 
 
 def load_config(path: str, fallback: Mapping[str, Mapping[str, Optional[int]]]):
+    merged = {name: dict(mapping) for name, mapping in fallback.items()}
     if not os.path.isfile(path):
-        return {name: dict(mapping) for name, mapping in fallback.items()}
+        return merged
+
     with open(path, "r", encoding="utf-8") as handle:
         loaded = json.load(handle)
-    return loaded
+
+    for filename, local_mapping in loaded.items():
+        combined = dict(merged.get(filename, {}))
+        combined.update(local_mapping)
+        merged[filename] = combined
+
+    return merged
 
 
 def write_resolved_config(path: str, mappings: Mapping[str, Mapping[str, Optional[int]]]):
