@@ -84,6 +84,10 @@ REQUIRED_IDENTITIES = {
         "stage": "survey&design",
         "task": "physical survey",
     },
+    ("TX_Mini_Project.csv", "L1"): {
+        "stage": "q&ehs",
+        "task": "l1 approved",
+    },
     ("TX_Mini_Project.csv", "RFS"): {
         "stage": "software commissioning",
         "task": "tx integrated",
