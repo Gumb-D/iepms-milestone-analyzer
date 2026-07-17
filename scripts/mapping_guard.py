@@ -96,6 +96,10 @@ REQUIRED_IDENTITIES = {
         "stage": "survey&design",
         "task": "physical survey",
     },
+    ("ZTE_TX_MINI.csv", "L1"): {
+        "stage": "q&ehs",
+        "task": "l1 approved",
+    },
 }
 
 # Some DU models do not implement every standard milestone. These explicit N/A
