@@ -100,6 +100,10 @@ REQUIRED_IDENTITIES = {
         "stage": "q&ehs",
         "task": "l1 approved",
     },
+    ("ZTE_TX_MINI.csv", "RFS"): {
+        "stage": "software commissioning",
+        "task": "site integrated",
+    },
 }
 
 # Some DU models do not implement every standard milestone. These explicit N/A
