@@ -4,7 +4,7 @@ import os
 import shutil
 import subprocess
 import sys
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 
 MILESTONES = ("SOW", "TSS", "MC", "MOS", "TI", "L1", "RFS", "PAC")
@@ -47,19 +47,40 @@ def _normalise(value: object) -> str:
 
 
 def _split_row(line: str) -> List[str]:
+    """Split a Markdown row without treating pipes inside code spans as separators."""
     stripped = line.strip()
     if not stripped.startswith("|"):
         return []
-    return [cell.strip() for cell in stripped.strip("|").split("|")]
+    body = stripped[1:-1] if stripped.endswith("|") else stripped[1:]
+    cells: List[str] = []
+    current: List[str] = []
+    in_code = False
+    escaped = False
+    for character in body:
+        if character == "`" and not escaped:
+            in_code = not in_code
+            current.append(character)
+        elif character == "|" and not in_code:
+            cells.append("".join(current).strip())
+            current = []
+        else:
+            current.append(character)
+        escaped = character == "\\" and not escaped
+        if character != "\\":
+            escaped = False
+    cells.append("".join(current).strip())
+    return cells
 
 
 def _is_separator(cells: Sequence[str]) -> bool:
-    return bool(cells) and all(set(cell.replace(":", "").replace(" ", "")) <= {"-"} for cell in cells)
+    return bool(cells) and all(
+        set(cell.replace(":", "").replace(" ", "")) <= {"-"}
+        for cell in cells
+    )
 
 
 def _as_int(value: str) -> int:
-    cleaned = _clean(value).replace(",", "")
-    return int(cleaned)
+    return int(_clean(value).replace(",", ""))
 
 
 def _parse_progress_rows(lines: Sequence[str], start: int) -> Tuple[Dict[str, dict], int]:
@@ -78,8 +99,7 @@ def _parse_progress_rows(lines: Sequence[str], start: int) -> Tuple[Dict[str, di
         if milestone not in MILESTONES:
             break
         months = [_as_int(value) for value in cells[1:13]]
-        total = _as_int(cells[13])
-        parsed[milestone] = {"months": months, "total": total}
+        parsed[milestone] = {"months": months, "total": _as_int(cells[13])}
         index += 1
     return parsed, index
 
@@ -97,9 +117,6 @@ def _parse_sla_rows(lines: Sequence[str], start: int) -> Tuple[Dict[str, dict], 
         if len(cells) < 7:
             break
         name = _clean(cells[0])
-        if name == "DU Model":
-            index += 1
-            continue
         key = "Combined" if name == "Total" else name
         parsed[key] = {
             "open": _as_int(cells[1]),
@@ -153,6 +170,19 @@ def parse_report(text: str) -> dict:
     return result
 
 
+def _validate_progress_row(label: str, row: dict) -> List[str]:
+    errors: List[str] = []
+    months = row.get("months", [])
+    total = row.get("total")
+    if len(months) != 12:
+        errors.append(f"{label} does not contain 12 months")
+    elif total is None or any(value < 0 for value in months) or total < 0:
+        errors.append(f"{label} contains negative or missing values")
+    elif sum(months) != total:
+        errors.append(f"{label} monthly sum does not equal total")
+    return errors
+
+
 def validate_report(parsed: dict, expected_models: Sequence[str] = EXPECTED_MODELS) -> List[str]:
     """Return deterministic structure and arithmetic errors for a parsed report."""
     errors: List[str] = []
@@ -164,15 +194,8 @@ def validate_report(parsed: dict, expected_models: Sequence[str] = EXPECTED_MODE
         row = combined.get(milestone)
         if row is None:
             errors.append(f"missing combined {milestone} row")
-            continue
-        months = row.get("months", [])
-        total = row.get("total")
-        if len(months) != 12:
-            errors.append(f"combined {milestone} does not contain 12 months")
-        elif any(value < 0 for value in months) or total < 0:
-            errors.append(f"combined {milestone} contains negative values")
-        elif sum(months) != total:
-            errors.append(f"combined {milestone} monthly sum does not equal total")
+        else:
+            errors.extend(_validate_progress_row(f"combined {milestone}", row))
 
     for model in expected_models:
         model_rows = models.get(model)
@@ -183,23 +206,16 @@ def validate_report(parsed: dict, expected_models: Sequence[str] = EXPECTED_MODE
             row = model_rows.get(milestone)
             if row is None:
                 errors.append(f"missing {model} {milestone} row")
-                continue
-            months = row.get("months", [])
-            total = row.get("total")
-            if len(months) != 12:
-                errors.append(f"{model} {milestone} does not contain 12 months")
-            elif any(value < 0 for value in months) or total < 0:
-                errors.append(f"{model} {milestone} contains negative values")
-            elif sum(months) != total:
-                errors.append(f"{model} {milestone} monthly sum does not equal total")
+            else:
+                errors.extend(_validate_progress_row(f"{model} {milestone}", row))
 
     for milestone in MILESTONES:
         if milestone not in combined:
             continue
-        available = [models.get(model, {}).get(milestone) for model in expected_models]
-        if any(row is None for row in available):
+        rows = [models.get(model, {}).get(milestone) for model in expected_models]
+        if any(row is None for row in rows):
             continue
-        model_total = sum(row["total"] for row in available if row is not None)
+        model_total = sum(row["total"] for row in rows if row is not None)
         if combined[milestone]["total"] != model_total:
             errors.append(
                 f"combined {milestone} total {combined[milestone]['total']} "
@@ -216,11 +232,10 @@ def validate_report(parsed: dict, expected_models: Sequence[str] = EXPECTED_MODE
             errors.append(f"missing {sla_key} combined SLA row")
             continue
         for name, row in table.items():
-            values = [row.get(key, -1) for key in ("open", "within", "warning", "breached")]
+            values = [row.get(field, -1) for field in ("open", "within", "warning", "breached")]
             if any(value < 0 for value in values):
                 errors.append(f"{sla_key} {name} contains negative or missing values")
-                continue
-            if row["open"] != row["within"] + row["warning"] + row["breached"]:
+            elif row["open"] != row["within"] + row["warning"] + row["breached"]:
                 errors.append(f"{sla_key} {name} open backlog does not equal status sum")
         if all(model in table for model in expected_models):
             for field in ("open", "within", "warning", "breached"):
@@ -235,11 +250,7 @@ def validate_report(parsed: dict, expected_models: Sequence[str] = EXPECTED_MODE
 
 def compare_reports(baseline: dict, live: dict) -> dict:
     """Return live-minus-baseline totals for combined, models, and SLA rows."""
-    deltas = {
-        "combined": {},
-        "models": {},
-        "sla": {},
-    }
+    deltas = {"combined": {}, "models": {}, "sla": {}}
     for milestone in MILESTONES:
         deltas["combined"][milestone] = (
             live["combined"][milestone]["total"]
@@ -284,8 +295,7 @@ def validate_mapping_document(text: str) -> List[str]:
         label = f"{key[0]} {key[1]}"
         if actual is None:
             errors.append(f"missing mapping identity for {label}")
-            continue
-        if tuple(_normalise(value) for value in actual) != tuple(
+        elif tuple(_normalise(value) for value in actual) != tuple(
             _normalise(value) for value in expected
         ):
             errors.append(
@@ -306,7 +316,7 @@ def render_summary(
     live_manifest: str,
     live_report: str,
     mapping_document: str,
-    deltas: Mapping[str, object],
+    deltas: dict,
     errors: Sequence[str],
 ) -> str:
     """Render deterministic Markdown acceptance evidence."""
@@ -352,14 +362,7 @@ def render_summary(
 
     lines.extend(["", "## Key DU Milestone Delta", ""])
     for model in ("TX Mini Project", "ZTE TX MINI"):
-        lines.extend(
-            [
-                f"### {model}",
-                "",
-                "| Milestone | Delta |",
-                "| :--- | ---: |",
-            ]
-        )
+        lines.extend([f"### {model}", "", "| Milestone | Delta |", "| :--- | ---: |"])
         model_delta = deltas.get("models", {}).get(model, {})
         for milestone in MILESTONES:
             lines.append(f"| {milestone} | {_signed(model_delta.get(milestone, 0))} |")
@@ -396,8 +399,7 @@ def _read_text(path: str) -> str:
 
 def _latest_manifest_path(output_dir: str) -> str:
     pointer_path = os.path.join(output_dir, "latest.json")
-    pointer = _load_json(pointer_path)
-    manifest_path = pointer.get("manifest_path")
+    manifest_path = _load_json(pointer_path).get("manifest_path")
     if not manifest_path:
         raise ValueError(f"latest pointer has no manifest_path: {pointer_path}")
     return os.path.abspath(manifest_path)
@@ -451,12 +453,7 @@ def _run_live_command(command: Sequence[str], cwd: str) -> subprocess.CompletedP
         for line in process.stdout:
             print(line, end="")
             lines.append(line)
-    return subprocess.CompletedProcess(
-        list(command),
-        process.wait(),
-        stdout="".join(lines),
-        stderr="",
-    )
+    return subprocess.CompletedProcess(list(command), process.wait(), stdout="".join(lines), stderr="")
 
 
 def _empty_deltas() -> dict:
@@ -495,6 +492,25 @@ def parse_args(argv: Optional[List[str]] = None):
     return parser.parse_args(argv)
 
 
+def _failure_summary(
+    output_path: str,
+    baseline_manifest: str,
+    errors: Sequence[str],
+) -> None:
+    _write_summary(
+        output_path,
+        render_summary(
+            status="FAIL",
+            baseline_manifest=baseline_manifest,
+            live_manifest="N/A",
+            live_report="N/A",
+            mapping_document="N/A",
+            deltas=_empty_deltas(),
+            errors=errors,
+        ),
+    )
+
+
 def run(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -511,16 +527,7 @@ def run(argv: Optional[List[str]] = None) -> int:
 
     baseline_errors = _validate_baseline_manifest(baseline_manifest, args.year)
     if baseline_errors:
-        summary = render_summary(
-            status="FAIL",
-            baseline_manifest=baseline_manifest_path,
-            live_manifest="N/A",
-            live_report="N/A",
-            mapping_document="N/A",
-            deltas=_empty_deltas(),
-            errors=baseline_errors,
-        )
-        _write_summary(top_summary_path, summary)
+        _failure_summary(top_summary_path, baseline_manifest_path, baseline_errors)
         print("FINAL_ACCEPTANCE status=FAIL reason=invalid_offline_baseline")
         print(f"FINAL_ACCEPTANCE_SUMMARY: {top_summary_path}")
         return 2
@@ -533,16 +540,7 @@ def run(argv: Optional[List[str]] = None) -> int:
         baseline_report_errors = [f"baseline report could not be parsed: {exc}"]
         baseline_parsed = None
     if baseline_report_errors:
-        summary = render_summary(
-            status="FAIL",
-            baseline_manifest=baseline_manifest_path,
-            live_manifest="N/A",
-            live_report="N/A",
-            mapping_document="N/A",
-            deltas=_empty_deltas(),
-            errors=baseline_report_errors,
-        )
-        _write_summary(top_summary_path, summary)
+        _failure_summary(top_summary_path, baseline_manifest_path, baseline_report_errors)
         print("FINAL_ACCEPTANCE status=FAIL reason=invalid_offline_report")
         print(f"FINAL_ACCEPTANCE_SUMMARY: {top_summary_path}")
         return 2
