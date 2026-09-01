@@ -212,8 +212,10 @@ def resolve_mapping_indices(
             continue
 
         if hint is None:
-            resolved[milestone] = None
-            continue
+            raise MappingValidationError(
+                f"{filename} {milestone}: null mapping is not allowed; "
+                "only explicitly unavailable milestones may resolve to None"
+            )
 
         scored_candidates = []
         for index in range(column_count):
