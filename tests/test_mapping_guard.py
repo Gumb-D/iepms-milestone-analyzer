@@ -135,6 +135,17 @@ class MilestoneMappingGuardTests(unittest.TestCase):
                 {"L1": None},
             )
 
+    def test_keeps_bau_mos_explicitly_unavailable(self):
+        headers = self._headers()
+
+        resolved = mapping_guard.resolve_mapping_indices(
+            "2024_Celcomdigi_BAU.csv",
+            headers,
+            {"MOS": None},
+        )
+
+        self.assertIsNone(resolved["MOS"])
+
 
 if __name__ == "__main__":
     unittest.main()
