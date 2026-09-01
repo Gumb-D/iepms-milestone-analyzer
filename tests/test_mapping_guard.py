@@ -117,6 +117,24 @@ class MilestoneMappingGuardTests(unittest.TestCase):
 
         self.assertEqual(resolved["RFS"], 148)
 
+    def test_rejects_null_override_for_required_milestone(self):
+        headers = self._headers(width=340)
+        self._set_column(
+            headers,
+            328,
+            "WPC000011222|AC0000079322|actual_end_date",
+            "Q&EHS",
+            "L1 Approved",
+            "actual end time",
+        )
+
+        with self.assertRaises(mapping_guard.MappingValidationError):
+            mapping_guard.resolve_mapping_indices(
+                "2023_TX_Rollout.csv",
+                headers,
+                {"L1": None},
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
