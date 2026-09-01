@@ -110,6 +110,7 @@ REQUIRED_IDENTITIES = {
 # declarations override stale integer hints and prevent unrelated fields from being
 # substituted merely to keep the report running.
 UNAVAILABLE_MILESTONES = {
+    ("2024_Celcomdigi_BAU.csv", "MOS"),
     ("Jendela_TX_Migration.csv", "TSS"),
 }
 
@@ -212,8 +213,10 @@ def resolve_mapping_indices(
             continue
 
         if hint is None:
-            resolved[milestone] = None
-            continue
+            raise MappingValidationError(
+                f"{filename} {milestone}: null mapping is not allowed; "
+                "only explicitly unavailable milestones may resolve to None"
+            )
 
         scored_candidates = []
         for index in range(column_count):

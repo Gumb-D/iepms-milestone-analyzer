@@ -117,6 +117,35 @@ class MilestoneMappingGuardTests(unittest.TestCase):
 
         self.assertEqual(resolved["RFS"], 148)
 
+    def test_rejects_null_override_for_required_milestone(self):
+        headers = self._headers(width=340)
+        self._set_column(
+            headers,
+            328,
+            "WPC000011222|AC0000079322|actual_end_date",
+            "Q&EHS",
+            "L1 Approved",
+            "actual end time",
+        )
+
+        with self.assertRaises(mapping_guard.MappingValidationError):
+            mapping_guard.resolve_mapping_indices(
+                "2023_TX_Rollout.csv",
+                headers,
+                {"L1": None},
+            )
+
+    def test_keeps_bau_mos_explicitly_unavailable(self):
+        headers = self._headers()
+
+        resolved = mapping_guard.resolve_mapping_indices(
+            "2024_Celcomdigi_BAU.csv",
+            headers,
+            {"MOS": None},
+        )
+
+        self.assertIsNone(resolved["MOS"])
+
 
 if __name__ == "__main__":
     unittest.main()
