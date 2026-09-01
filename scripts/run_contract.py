@@ -5,9 +5,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Iterable, List, Optional, Tuple
 
+
 LIVE_FETCH = "LIVE_FETCH"
 OFFLINE_LOCAL = "OFFLINE_LOCAL"
 MALAYSIA_TZ = timezone(timedelta(hours=8))
+FILESYSTEM_TIMESTAMP_GRANULARITY_SECONDS = 1.0
 
 
 @dataclass(frozen=True)
@@ -82,7 +84,12 @@ def verify_fresh_files(
         except FileNotFoundError:
             missing.append(clean_name)
             continue
-        if stat.st_size <= 0 or stat.st_mtime < run_started_epoch:
+
+        timestamp_is_stale = (
+            stat.st_mtime + FILESYSTEM_TIMESTAMP_GRANULARITY_SECONDS
+            < run_started_epoch
+        )
+        if stat.st_size <= 0 or timestamp_is_stale:
             missing.append(clean_name)
             continue
         downloaded.append(clean_name)

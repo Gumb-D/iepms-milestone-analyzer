@@ -36,6 +36,24 @@ class RunContractTests(unittest.TestCase):
             self.assertEqual(downloaded, ["Fresh"])
             self.assertEqual(missing, ["Stale", "Empty", "Absent"])
 
+    def test_accepts_file_created_in_same_coarse_timestamp_second(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            started = 1_700_000_000.750
+            path = os.path.join(tmp, "Fresh.xlsx")
+            with open(path, "wb") as handle:
+                handle.write(b"data")
+
+            # Some Windows/filesystem combinations expose write timestamps only to
+            # whole-second precision even though the run start time has fractions.
+            os.utime(path, (1_700_000_000.0, 1_700_000_000.0))
+
+            downloaded, missing = verify_downloaded_files(
+                tmp, ["Fresh"], started
+            )
+
+            self.assertEqual(downloaded, ["Fresh"])
+            self.assertEqual(missing, [])
+
     def test_failed_manifest_preserves_diagnostics(self):
         with tempfile.TemporaryDirectory() as tmp:
             now = datetime(2026, 7, 14, 10, 15, 30, tzinfo=timezone(timedelta(hours=8)))
